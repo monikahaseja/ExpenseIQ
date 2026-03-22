@@ -1,0 +1,165 @@
+
+==============================================================================
+                    ExpenseIQ - Feature Enhancement Plan
+==============================================================================
+
+Current Features (Already Implemented):
+---------------------------------------
+✅ Add/Edit/Delete income & expenses
+✅ Monthly navigation with date picker
+✅ Budget limit & progress bar
+✅ Search expenses
+✅ Dark/Light theme toggle
+✅ Customizable app title
+
+
+==============================================================================
+          SECTION 1: UNIQUE FEATURES TO ADD (To Stand Out From Others)
+==============================================================================
+
+--- Smart & AI Features ---
+1.  AI-Powered Expense Categorization — Auto-categorize expenses (Food, Transport, Bills, etc.) using keywords
+2.  Smart Spending Insights — "You spent 40% more on food this month vs last month"
+3.  Expense Prediction — Predict end-of-month spending based on current trends
+
+--- Analytics & Visualization ---
+4.  Interactive Charts — Pie chart (category breakdown), Bar chart (daily/weekly), Line chart (monthly trends)
+5.  Category-wise Breakdown — Visual spending per category with icons & colors
+6.  Income vs Expense Comparison Graph — Month-over-month visual comparison
+7.  Savings Rate Tracker — Show what % of income you're saving each month
+
+--- Alerts & Reminders ---
+8.  Bill Reminder Notifications — Set recurring reminders for rent, EMI, subscriptions
+9.  Daily Expense Reminder — Push notification to log today's expenses
+10. Overspending Alerts — Notify when a specific category exceeds its limit
+
+--- Organization ---
+11. Expense Categories with Custom Icons — Food 🍔, Travel ✈️, Shopping 🛒, etc.
+12. Tags / Labels — Add multiple tags to each transaction for flexible filtering
+13. Recurring Transactions — Auto-add monthly rent, salary, subscriptions
+14. Payment Mode Tracking — Cash, UPI, Credit Card, Debit Card, etc.
+
+--- Data Management ---
+15. Export to CSV / PDF — Download monthly reports
+16. Cloud Backup & Restore — Google Drive / local file backup
+17. Multi-Currency Support — Track expenses in different currencies with conversion
+
+--- Goals & Gamification ---
+18. Savings Goals — Set goals (e.g., "Save ₹50,000 for vacation") with progress tracking
+19. Streaks & Achievements — "7-day logging streak! 🔥", "Under budget 3 months in a row! 🏆"
+20. Monthly Financial Score — Rate your financial health (A+ to F) based on saving ratio & budget adherence
+
+--- Social & Sharing ---
+21. Split Expenses — Split bills with friends and track who owes what
+22. Shared Family Budget — Multiple users managing one household budget
+
+--- Security ---
+23. App Lock — PIN / Biometric authentication to open the app
+24. Hide Sensitive Transactions — Mark transactions as private
+
+--- Unique Differentiators ---
+25. Receipt Scanner (Camera OCR) — Snap a photo of a receipt to auto-fill amount & description
+26. Voice Input — "Add ₹500 for groceries" via speech-to-text
+27. Expense Heatmap Calendar — Calendar view showing spending intensity per day (green = low, red = high)
+28. Financial Quotes / Tips — Daily money-saving tips on the home screen
+29. Debt Tracker — Track money you owe or others owe you
+30. Subscription Manager — Track all active subscriptions with renewal dates & monthly cost
+
+--- Top 5 Picks for Maximum Impact ---
+1. 📊 Interactive Charts (most requested in finance apps)
+2. 🏷️ Expense Categories with Icons
+3. 📸 Receipt Scanner / Camera OCR
+4. 🎯 Savings Goals with Progress
+5. 🗓️ Expense Heatmap Calendar
+
+
+==============================================================================
+          SECTION 2: AI FINANCIAL AGENT - DETAILED PLAN
+==============================================================================
+
+How the AI Agent Would Work:
+----------------------------
+The agent analyzes your existing SQLite database for:
+- Monthly income vs expenses ratio
+- Category-wise spending patterns
+- Budget adherence history
+- Spending trends (increasing/decreasing)
+
+
+Types of Suggestions:
+---------------------
+
+A) EXPENSE SUGGESTIONS:
+   ┌─────────────────────────────┬───────────────────────────────────────────────────────────────────┐
+   │ Trigger                     │ Example Suggestion                                                │
+   ├─────────────────────────────┼───────────────────────────────────────────────────────────────────┤
+   │ Overspending in a category  │ "You spent ₹8,000 on food — 60% more than your 3-month avg.     │
+   │                             │  Try meal prepping to save ~₹3,000"                               │
+   ├─────────────────────────────┼───────────────────────────────────────────────────────────────────┤
+   │ Budget almost exhausted     │ "You've used 85% of budget with 10 days left.                    │
+   │                             │  Limit daily spending to ₹200"                                    │
+   ├─────────────────────────────┼───────────────────────────────────────────────────────────────────┤
+   │ Recurring high expenses     │ "You spend ₹1,500/month on subscriptions.                        │
+   │                             │  Review if all are needed"                                        │
+   ├─────────────────────────────┼───────────────────────────────────────────────────────────────────┤
+   │ Unusual transaction         │ "₹15,000 expense today is 5x your daily average.                 │
+   │                             │  Was this planned?"                                               │
+   └─────────────────────────────┴───────────────────────────────────────────────────────────────────┘
+
+B) INVESTMENT SUGGESTIONS:
+   ┌─────────────────────────────┬───────────────────────────────────────────────────────────────────┐
+   │ Trigger                     │ Example Suggestion                                                │
+   ├─────────────────────────────┼───────────────────────────────────────────────────────────────────┤
+   │ Surplus savings             │ "You saved ₹12,000 this month!                                   │
+   │                             │  Consider investing in a SIP or FD"                               │
+   ├─────────────────────────────┼───────────────────────────────────────────────────────────────────┤
+   │ Consistent savings          │ "You've saved 30%+ for 3 months straight —                       │
+   │                             │  great time to start a mutual fund SIP"                           │
+   ├─────────────────────────────┼───────────────────────────────────────────────────────────────────┤
+   │ Emergency fund check        │ "Your monthly expenses are ₹25,000.                              │
+   │                             │  Aim for ₹75,000 (3 months) as an emergency fund"                 │
+   ├─────────────────────────────┼───────────────────────────────────────────────────────────────────┤
+   │ Idle money                  │ "Your balance has been above ₹50,000 for 2 months.               │
+   │                             │  Parking in a liquid fund could earn ~6% annually"                │
+   └─────────────────────────────┴───────────────────────────────────────────────────────────────────┘
+
+C) SMART TIPS:
+   - "50-30-20 Rule: Allocate 50% to needs, 30% to wants, 20% to savings"
+   - "Your savings rate is 15% — try to push it to 20% this month"
+   - "You have no income logged this month. Don't forget to add your salary!"
+
+
+Implementation Approaches:
+--------------------------
+
+OPTION 1: Rule-Based Agent (Offline, No API needed) ✅ RECOMMENDED
+   - Write logic that analyzes spending data locally
+   - Uses if-else rules and formulas to generate tips
+   - Pros: Free, works offline, fast, no privacy concerns
+   - Example: If savings > 20% of income → suggest investment
+
+OPTION 2: LLM-Powered Agent (API-based)
+   - Send spending summary to an AI API (Gemini, OpenAI, etc.)
+   - Get personalized, natural-language advice
+   - Pros: More intelligent, conversational responses
+   - Cons: Requires API key, internet, costs money, privacy concern
+
+
+Where the Agent Would Appear in the App:
+-----------------------------------------
+1. New "Insights" Tab     — Dedicated tab with cards showing suggestions
+2. Home Screen Banner     — Top tip of the day on the home page
+3. Post-Transaction Nudge — After adding an expense, show a quick tip
+4. Monthly Report Card    — End of month summary with agent's review
+
+
+Recommendation:
+---------------
+Start with Option 1 (Rule-Based) — it's practical, works offline, and can
+be built with existing SQLite data. An LLM layer can be added later for
+more intelligent, conversational responses.
+
+
+==============================================================================
+                          END OF DOCUMENT
+==============================================================================

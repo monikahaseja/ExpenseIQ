@@ -1,98 +1,357 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
-
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { useFocusEffect } from "@react-navigation/native";
+import { useRouter } from "expo-router";
+import { useColorScheme } from "nativewind";
+import { useCallback, useMemo, useState } from "react";
+import {
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import ExpenseItem, { Expense } from "../../components/ExpenseItem";
+import { Colors } from "../../constants/colors";
+import { db, getSetting } from "../../db/database";
 
 export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+  const { colorScheme } = useColorScheme();
+  const theme = Colors[colorScheme ?? "light"];
+  const router = useRouter();
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [search, setSearch] = useState("");
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [showPicker, setShowPicker] = useState(false);
+  const [tempDate, setTempDate] = useState(new Date());
+  const [appTitle, setAppTitle] = useState("💰ExpenseIQ");
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+  const fetchExpenses = async () => {
+    try {
+      const year = currentDate.getFullYear();
+      const month = (currentDate.getMonth() + 1).toString().padStart(2, "0");
+      const monthStr = `${year}-${month}`;
+
+      const rows = await db.getAllAsync<Expense>(
+        "SELECT * FROM expenses WHERE strftime('%Y-%m', created_at) = ? OR created_at LIKE ? ORDER BY id DESC;",
+        [monthStr, `${monthStr}%`],
+      );
+      setExpenses(rows);
+
+      const savedTitle = await getSetting("app_title");
+      if (savedTitle) setAppTitle(savedTitle);
+    } catch (e) {
+      console.error("Error fetching expenses:", e);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchExpenses();
+    }, [currentDate]),
+  );
+
+  const changeMonth = (direction: number) => {
+    const newDate = new Date(currentDate);
+    newDate.setMonth(newDate.getMonth() + direction);
+    setCurrentDate(newDate);
+  };
+
+  const filteredExpenses = useMemo(() => {
+    if (!search.trim()) return expenses;
+    return expenses.filter(
+      (e) =>
+        e.title.toLowerCase().includes(search.toLowerCase()) ||
+        e.amount.toString().includes(search),
+    );
+  }, [expenses, search]);
+
+  const { balance, totalIncome, totalExpenses } = useMemo(() => {
+    return filteredExpenses.reduce(
+      (acc, e) => {
+        if (e.type === "income") {
+          acc.totalIncome += e.amount;
+          acc.balance += e.amount;
+        } else {
+          acc.totalExpenses += e.amount;
+          acc.balance -= e.amount;
+        }
+        return acc;
+      },
+      { balance: 0, totalIncome: 0, totalExpenses: 0 },
+    );
+  }, [filteredExpenses]);
+
+  const deleteExpense = (id: number) => {
+    Alert.alert("Delete Expense", "Are you sure?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          await db.runAsync("DELETE FROM expenses WHERE id=?;", [id]);
+          fetchExpenses();
+        },
+      },
+    ]);
+  };
+
+  const formattedMonth = currentDate.toLocaleString("default", {
+    month: "long",
+    year: "numeric",
+  });
+
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      className="flex-1 bg-white dark:bg-black"
+    >
+      <View className="flex-1 p-4">
+        <Text className="text-2xl font-bold text-center mb-4 text-black dark:text-white mt-8">
+          {appTitle}
+        </Text>
+
+        <View className="flex-row justify-between items-center mb-4 bg-gray-100 dark:bg-gray-800 p-2 rounded-xl">
+          <TouchableOpacity onPress={() => changeMonth(-1)} className="p-2">
+            <Ionicons name="chevron-back" size={24} color={theme.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => {
+              setTempDate(new Date(currentDate));
+              setShowPicker(true);
+            }}
+            className="flex-row items-center px-4 py-2"
+          >
+            <Text className="text-lg font-bold text-black dark:text-white mr-1">
+              {formattedMonth}
+            </Text>
+            <Ionicons name="caret-down" size={12} color={theme.gray} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => changeMonth(1)} className="p-2">
+            <Ionicons name="chevron-forward" size={24} color={theme.primary} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Month/Year Picker Modal */}
+        <Modal
+          visible={showPicker}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowPicker(false)}
+        >
+          <View className="flex-1 justify-center items-center bg-black/50 px-6">
+            <View className="bg-white dark:bg-gray-900 w-full rounded-3xl p-6 shadow-2xl">
+              <Text className="text-xl font-bold mb-6 text-center text-black dark:text-white">
+                Choose Date
+              </Text>
+
+              <View className="flex-row justify-between mb-8">
+                {/* Year Selection */}
+                <View className="flex-1 mr-2">
+                  <Text className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 text-center">
+                    Year
+                  </Text>
+                  <ScrollView
+                    style={{ maxHeight: 200 }}
+                    showsVerticalScrollIndicator={false}
+                  >
+                    {Array.from(
+                      { length: 10 },
+                      (_, i) => new Date().getFullYear() - 5 + i,
+                    ).map((year) => (
+                      <TouchableOpacity
+                        key={year}
+                        onPress={() => {
+                          const nd = new Date(tempDate);
+                          nd.setFullYear(year);
+                          setTempDate(nd);
+                        }}
+                        className={`py-3 rounded-xl mb-1 ${tempDate.getFullYear() === year ? "bg-cyan-100 dark:bg-cyan-900/40" : ""}`}
+                      >
+                        <Text
+                          className={`text-center font-bold ${tempDate.getFullYear() === year ? "text-cyan-800 dark:text-cyan-400" : "text-gray-500"}`}
+                        >
+                          {year}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+
+                {/* Month Selection */}
+                <View className="flex-1 ml-2">
+                  <Text className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 text-center">
+                    Month
+                  </Text>
+                  <ScrollView
+                    style={{ maxHeight: 200 }}
+                    showsVerticalScrollIndicator={false}
+                  >
+                    {Array.from({ length: 12 }, (_, i) => i).map((month) => {
+                      const mName = new Date(2000, month).toLocaleString(
+                        "default",
+                        { month: "short" },
+                      );
+                      const isSelected = tempDate.getMonth() === month;
+                      return (
+                        <TouchableOpacity
+                          key={month}
+                          onPress={() => {
+                            const nd = new Date(tempDate);
+                            nd.setMonth(month);
+                            setTempDate(nd);
+                          }}
+                          className={`py-3 rounded-xl mb-1 ${isSelected ? "bg-cyan-100 dark:bg-cyan-900/40" : ""}`}
+                        >
+                          <Text
+                            className={`text-center font-bold ${isSelected ? "text-cyan-800 dark:text-cyan-400" : "text-gray-500"}`}
+                          >
+                            {mName}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              </View>
+
+              <View className="flex-row gap-3">
+                <TouchableOpacity
+                  onPress={() => setShowPicker(false)}
+                  className="flex-1 p-4 rounded-2xl bg-gray-100 dark:bg-gray-800"
+                >
+                  <Text className="text-center font-bold text-gray-600 dark:text-gray-400">
+                    Cancel
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    setCurrentDate(new Date(tempDate));
+                    setShowPicker(false);
+                  }}
+                  className="flex-1 p-4 rounded-2xl bg-cyan-800"
+                >
+                  <Text className="text-center font-bold text-white">
+                    Apply
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        <View className="bg-cyan-800 p-5 rounded-3xl mb-6 shadow-lg shadow-cyan-900/30">
+          <View className="mb-4">
+            <Text className="text-cyan-200 text-xs font-bold uppercase tracking-widest pl-1 mb-1">
+              Net Balance
+            </Text>
+            <Text
+              className={`text-4xl font-extrabold ${balance >= 0 ? "text-green-400" : "text-red-400"}`}
+            >
+              {balance >= 0 ? "+ " : "- "}₹ {Math.abs(balance).toFixed(2)}
+            </Text>
+          </View>
+
+          <View className="flex-row justify-between pt-4 border-t border-cyan-700/50">
+            <View>
+              <Text className="text-cyan-200 text-[10px] font-bold uppercase tracking-widest mb-1">
+                Income
+              </Text>
+              <View className="flex-row items-center">
+                <Ionicons
+                  name="trending-up"
+                  size={16}
+                  color="#4ade80"
+                  className="mr-1"
+                />
+                <Text className="text-green-400 text-lg font-bold">
+                  + ₹{totalIncome.toFixed(2)}
+                </Text>
+              </View>
+            </View>
+            <View className="items-end">
+              <Text className="text-cyan-200 text-[10px] font-bold uppercase tracking-widest mb-1">
+                Expenses
+              </Text>
+              <View className="flex-row items-center">
+                <Ionicons
+                  name="trending-down"
+                  size={16}
+                  color="#f87171"
+                  className="mr-1"
+                />
+                <Text className="text-red-400 text-lg font-bold">
+                  - ₹{totalExpenses.toFixed(0)}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        <View className="flex-row items-center bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl mb-4 px-3">
+          <Ionicons name="search" size={20} color={theme.gray} />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search expense..."
+            placeholderTextColor={theme.gray}
+            className="flex-1 py-3 px-2 text-black dark:text-white"
+          />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch("")}>
+              <Ionicons name="close-circle" size={20} color={theme.gray} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <FlatList
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 100 }}
+          data={filteredExpenses}
+          keyExtractor={(i) => i.id.toString()}
+          renderItem={({ item }) => (
+            <ExpenseItem
+              item={item}
+              onEdit={(expense) =>
+                router.push({
+                  pathname: "/add-expense" as any,
+                  params: {
+                    id: expense.id,
+                    title: expense.title,
+                    amount: expense.amount,
+                    type: expense.type,
+                  },
+                })
+              }
+              onDelete={deleteExpense}
+            />
+          )}
+          ListEmptyComponent={
+            <View className="items-center mt-10">
+              <Ionicons
+                name="receipt-outline"
+                size={64}
+                color={theme.tabIconDefault}
+              />
+              <Text className="text-center text-gray-400 mt-4 text-lg">
+                No expenses found for this month
+              </Text>
+            </View>
+          }
+        />
+
+        <TouchableOpacity
+          onPress={() => router.push("/add-expense" as any)}
+          style={{ backgroundColor: theme.primary }}
+          className="absolute bottom-10 right-8 w-16 h-16 rounded-full items-center justify-center shadow-xl shadow-cyan-900/40"
+        >
+          <Ionicons name="add" size={32} color="white" />
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
-
-const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
-});
