@@ -16,19 +16,22 @@ import {
   View,
 } from "react-native";
 import ExpenseItem, { Expense } from "../../components/ExpenseItem";
+import { useNotification } from "../../components/NotificationContext";
 import { Colors } from "../../constants/colors";
-import { db, getSetting } from "../../db/database";
+import { db, getSetting, getUnreadCount } from "../../db/database";
 
 export default function HomeScreen() {
   const { colorScheme } = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
   const router = useRouter();
+  const { showNotification } = useNotification();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [search, setSearch] = useState("");
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showPicker, setShowPicker] = useState(false);
   const [tempDate, setTempDate] = useState(new Date());
   const [appTitle, setAppTitle] = useState("💰ExpenseIQ");
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const fetchExpenses = async () => {
     try {
@@ -44,6 +47,9 @@ export default function HomeScreen() {
 
       const savedTitle = await getSetting("app_title");
       if (savedTitle) setAppTitle(savedTitle);
+
+      const count = await getUnreadCount();
+      setUnreadCount(count);
     } catch (e) {
       console.error("Error fetching expenses:", e);
     }
@@ -95,6 +101,7 @@ export default function HomeScreen() {
         onPress: async () => {
           await db.runAsync("DELETE FROM expenses WHERE id=?;", [id]);
           fetchExpenses();
+          showNotification("Expense deleted successfully", "success");
         },
       },
     ]);
@@ -111,9 +118,32 @@ export default function HomeScreen() {
       className="flex-1 bg-white dark:bg-black"
     >
       <View className="flex-1 p-4">
-        <Text className="text-2xl font-bold text-center mb-4 text-black dark:text-white mt-8">
-          {appTitle}
-        </Text>
+        <View className="flex-row justify-between items-center mb-4 mt-8">
+          <Text className="text-2xl font-bold text-black dark:text-white">
+            {appTitle}
+          </Text>
+          <TouchableOpacity
+            onPress={() => router.push("/(tabs)/notifications" as any)}
+            style={{ position: "relative", padding: 8 }}
+          >
+            <Ionicons name="notifications-outline" size={26} color={theme.text} />
+            {unreadCount > 0 && (
+              <View
+                style={{
+                  position: "absolute",
+                  top: 6,
+                  right: 6,
+                  width: 10,
+                  height: 10,
+                  borderRadius: 5,
+                  backgroundColor: "#ef4444",
+                  borderWidth: 2,
+                  borderColor: colorScheme === "dark" ? "#000" : "#fff",
+                }}
+              />
+            )}
+          </TouchableOpacity>
+        </View>
 
         <View className="flex-row justify-between items-center mb-4 bg-gray-100 dark:bg-gray-800 p-2 rounded-xl">
           <TouchableOpacity onPress={() => changeMonth(-1)} className="p-2">

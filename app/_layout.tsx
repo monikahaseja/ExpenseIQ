@@ -4,6 +4,7 @@ import { View, Text, ActivityIndicator } from "react-native";
 import { useColorScheme } from "nativewind";
 import { initDB } from "../db/database";
 import { Colors } from "../constants/colors";
+import { NotificationProvider } from "../components/NotificationContext";
 import "../global.css";
 
 export default function RootLayout() {
@@ -29,23 +30,25 @@ export default function RootLayout() {
   const theme = Colors[colorScheme ?? 'light'];
 
   return (
-    <Stack>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen 
-        name="add-expense" 
-        options={{ 
-          presentation: 'modal', 
-          title: 'Add Expense',
-          headerStyle: {
-            backgroundColor: theme.background,
-          },
-          headerTintColor: theme.text,
-          headerTitleStyle: {
-            fontWeight: 'bold',
-          },
-          headerShadowVisible: false,
-        }} 
-      />
-    </Stack>
+    <NotificationProvider>
+      <Stack>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen 
+          name="add-expense" 
+          options={{ 
+            presentation: 'modal', 
+            title: 'Add Expense',
+            headerStyle: {
+              backgroundColor: theme.background,
+            },
+            headerTintColor: theme.text,
+            headerTitleStyle: {
+              fontWeight: 'bold',
+            },
+            headerShadowVisible: false,
+          }} 
+        />
+      </Stack>
+    </NotificationProvider>
   );
 }

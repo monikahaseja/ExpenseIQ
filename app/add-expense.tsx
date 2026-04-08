@@ -13,7 +13,8 @@ import {
   View,
 } from "react-native";
 import { Colors } from "../constants/colors";
-import { db } from "../db/database";
+import { db, getBudget } from "../db/database";
+import { useNotification } from "../components/NotificationContext";
 import { now } from "../utils/date";
 
 export default function AddExpenseScreen() {
@@ -21,6 +22,7 @@ export default function AddExpenseScreen() {
   const theme = Colors[colorScheme ?? "light"];
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { showNotification } = useNotification();
 
   const expenseId = params.id ? parseInt(params.id as string) : null;
 
@@ -37,6 +39,41 @@ export default function AddExpenseScreen() {
       setType((params.type as "income" | "expense") || "expense");
     }
   }, [params.id]);
+
+  const checkBudgetLimit = async () => {
+    try {
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = (today.getMonth() + 1).toString().padStart(2, "0");
+      const monthKey = `${year}-${month}`;
+
+      const budgetLimit = await getBudget(monthKey);
+      if (budgetLimit <= 0) return;
+
+      const rows = await db.getAllAsync<{ amount: number; type: string }>(
+        "SELECT amount, type FROM expenses WHERE created_at LIKE ?;",
+        [`${monthKey}%`],
+      );
+
+      let totalSpent = 0;
+      rows.forEach((item) => {
+        if (item.type === "expense") totalSpent += item.amount;
+      });
+
+      const percent = (totalSpent / budgetLimit) * 100;
+      if (percent >= 100) {
+        setTimeout(() => {
+          showNotification("🚨 Budget limit exceeded!", "error", 4000);
+        }, 1500);
+      } else if (percent >= 80) {
+        setTimeout(() => {
+          showNotification(`⚠️ You've used ${percent.toFixed(0)}% of your budget`, "warning", 4000);
+        }, 1500);
+      }
+    } catch (e) {
+      // silently fail budget check
+    }
+  };
 
   const saveExpense = async () => {
     let hasError = false;
@@ -60,17 +97,24 @@ export default function AddExpenseScreen() {
           "UPDATE expenses SET title=?, amount=?, type=?, updated_at=? WHERE id=?;",
           [title, parseFloat(amount), type, now(), expenseId],
         );
+        showNotification("Transaction updated successfully!", "success");
       } else {
         await db.runAsync(
           "INSERT INTO expenses (title, amount, type, created_at, updated_at) VALUES (?, ?, ?, ?, ?);",
           [title, parseFloat(amount), type, now(), now()],
         );
+        showNotification("Transaction added successfully!", "success");
+      }
+
+      // Check if budget limit is reached/exceeded (only for expense type)
+      if (type === "expense") {
+        await checkBudgetLimit();
       }
 
       router.back();
     } catch (error: any) {
       console.error("Failed to save expense:", error);
-      Alert.alert("Error", "Failed to save expense: " + error.message);
+      showNotification("Failed to save transaction", "error");
     }
   };
 

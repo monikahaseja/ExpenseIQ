@@ -5,6 +5,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { db, getBudget, saveBudget, getSetting, saveSetting } from "../../db/database";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Colors } from "../../constants/colors";
+import { useNotification } from "../../components/NotificationContext";
 
 if (Platform.OS === 'android') {
   if (UIManager.setLayoutAnimationEnabledExperimental) {
@@ -16,6 +17,7 @@ if (Platform.OS === 'android') {
 export default function SettingsScreen() {
   const { colorScheme, toggleColorScheme } = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
+  const { showNotification } = useNotification();
   const [limit, setLimit] = useState("");
   const [spent, setSpent] = useState(0);
   const [income, setIncome] = useState(0);
@@ -72,7 +74,11 @@ export default function SettingsScreen() {
   const handleLimitChange = async (text: string) => {
     setLimit(text);
     const monthKey = getCurrentMonthKey();
-    await saveBudget(monthKey, parseFloat(text) || 0);
+    const val = parseFloat(text) || 0;
+    await saveBudget(monthKey, val);
+    if (val > 0) {
+      showNotification(`Budget limit set to ₹${val.toFixed(0)}`, "info");
+    }
   };
 
   const limitNum = parseFloat(limit) || 0;
@@ -108,21 +114,27 @@ export default function SettingsScreen() {
               value={appTitle}
               onChangeText={(text) => {
                 setAppTitle(text);
+                setIsSaved(false);
                 if (!text.trim()) {
                   setTitleError("Title cannot be empty");
-                  setIsSaved(false);
                 } else {
                   setTitleError("");
-                  saveSetting("app_title", text);
-                  setIsSaved(true);
-                  setTimeout(() => setIsSaved(false), 2000);
                 }
               }}
               placeholder="e.g., My Business Tracker"
               className="flex-1 py-4 text-lg font-bold text-black dark:text-white"
             />
             {!titleError && appTitle.trim().length > 0 && (
-              <Ionicons name="checkmark" size={20} color={theme.success} />
+              <TouchableOpacity
+                onPress={() => {
+                  saveSetting("app_title", appTitle);
+                  setIsSaved(true);
+                  showNotification("App name updated!", "success");
+                  setTimeout(() => setIsSaved(false), 2000);
+                }}
+              >
+                <Ionicons name="checkmark" size={20} color={theme.success} />
+              </TouchableOpacity>
             )}
           </View>
           {titleError && <Text className="text-red-500 text-xs ml-1 mt-2 font-bold">{titleError}</Text>}
@@ -298,7 +310,13 @@ export default function SettingsScreen() {
             </View>
             <Switch
               value={colorScheme === 'dark'}
-              onValueChange={() => toggleColorScheme()}
+              onValueChange={() => {
+                toggleColorScheme();
+                showNotification(
+                  `Switched to ${colorScheme === 'dark' ? 'Light' : 'Dark'} mode`,
+                  "info"
+                );
+              }}
               trackColor={{ false: theme.tabIconDefault, true: theme.border }}
               thumbColor={colorScheme === 'dark' ? theme.accent : theme.warning}
             />

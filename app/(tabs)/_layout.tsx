@@ -1,12 +1,12 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Tabs } from "expo-router";
-import { Platform } from "react-native";
 import { useColorScheme } from "nativewind";
+import { Platform } from "react-native";
 import { Colors } from "../../constants/colors";
 
 export default function TabLayout() {
   const { colorScheme } = useColorScheme();
-  const theme = Colors[colorScheme ?? 'light'];
+  const theme = Colors[colorScheme ?? "light"];
   const isDark = colorScheme === "dark";
 
   return (
@@ -39,6 +39,13 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="home" size={size} color={color} />
           ),
+          headerShown: false,
+        }}
+      />
+      <Tabs.Screen
+        name="notifications"
+        options={{
+          href: null,
           headerShown: false,
         }}
       />
