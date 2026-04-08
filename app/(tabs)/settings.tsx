@@ -1,4 +1,4 @@
-import { View, Text, TextInput, ScrollView, Alert, TouchableOpacity, Platform, LayoutAnimation, UIManager, Switch, Modal } from "react-native";
+import { View, Text, TextInput, ScrollView, Alert, TouchableOpacity, Platform, LayoutAnimation, UIManager, Switch, Modal, Linking } from "react-native";
 import { useState, useCallback } from "react";
 import { useColorScheme } from "nativewind";
 import { useFocusEffect } from "@react-navigation/native";
@@ -13,13 +13,13 @@ if (Platform.OS === 'android') {
   }
 }
 
-
 export default function SettingsScreen() {
   const { colorScheme, toggleColorScheme } = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
   const { showNotification } = useNotification();
-  const [limit, setLimit] = useState("");
   const [spent, setSpent] = useState(0);
+  const [budgetLimit, setBudgetLimit] = useState("");
+  const [lastSavedBudget, setLastSavedBudget] = useState("");
   const [income, setIncome] = useState(0);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showPicker, setShowPicker] = useState(false);
@@ -36,8 +36,9 @@ export default function SettingsScreen() {
 
   const loadMonthData = async () => {
     const monthKey = getCurrentMonthKey();
-    const savedLimit = await getBudget(monthKey);
-    setLimit(savedLimit.toString());
+    const limit = await getBudget(monthKey);
+    setBudgetLimit(limit > 0 ? limit.toString() : "");
+    setLastSavedBudget(limit > 0 ? limit.toString() : "");
 
     const rows = await db.getAllAsync<{ amount: number; type: string }>(
       "SELECT amount, type FROM expenses WHERE created_at LIKE ?;",
@@ -71,17 +72,15 @@ export default function SettingsScreen() {
     setCurrentDate(newDate);
   };
 
-  const handleLimitChange = async (text: string) => {
-    setLimit(text);
+  const handleSaveBudget = async () => {
+    const limit = parseFloat(budgetLimit) || 0;
     const monthKey = getCurrentMonthKey();
-    const val = parseFloat(text) || 0;
-    await saveBudget(monthKey, val);
-    if (val > 0) {
-      showNotification(`Budget limit set to ₹${val.toFixed(0)}`, "info");
-    }
+    await saveBudget(monthKey, limit);
+    setLastSavedBudget(budgetLimit);
+    showNotification(`Monthly budget set to ₹${limit}`, "success");
   };
 
-  const limitNum = parseFloat(limit) || 0;
+  const limitNum = parseFloat(budgetLimit) || 0;
   const progressPercent = limitNum > 0 ? (spent / limitNum) * 100 : 0;
   const progress = Math.min(progressPercent, 100);
   
@@ -253,13 +252,27 @@ export default function SettingsScreen() {
 
         <View className="mb-6">
           <Text className="text-gray-500 text-xs font-bold mb-2 uppercase tracking-widest pl-1">Set Limit (₹)</Text>
-          <TextInput
-            value={limit}
-            onChangeText={handleLimitChange}
-            keyboardType="numeric"
-            placeholder="0.00"
-            className="text-2xl font-bold bg-gray-50 dark:bg-gray-800 p-4 rounded-2xl text-black dark:text-white"
-          />
+          <View className="flex-row items-center bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 border border-gray-100 dark:border-gray-700">
+            <TextInput
+              value={budgetLimit}
+              onChangeText={setBudgetLimit}
+              keyboardType="numeric"
+              placeholder="0.00"
+              className="flex-1 py-4 text-2xl font-bold text-black dark:text-white"
+            />
+            {budgetLimit !== lastSavedBudget && (
+              <TouchableOpacity
+                onPress={handleSaveBudget}
+                style={{
+                  backgroundColor: theme.success,
+                  padding: 8,
+                  borderRadius: 12,
+                }}
+              >
+                <Ionicons name="checkmark" size={20} color="white" />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
         <View className="flex-row justify-between items-end mb-4">

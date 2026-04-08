@@ -50,6 +50,16 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="advisor"
+        options={{
+          title: "Advisor",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="sparkles" size={size} color={color} />
+          ),
+          headerShown: false,
+        }}
+      />
+      <Tabs.Screen
         name="settings"
         options={{
           title: "Settings",
