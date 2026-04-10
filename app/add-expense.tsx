@@ -16,6 +16,7 @@ import { Colors } from "../constants/colors";
 import { db, getBudget } from "../db/database";
 import { useNotification } from "../components/NotificationContext";
 import { now } from "../utils/date";
+import { CATEGORIES, INCOME_CATEGORIES, PAYMENT_MODES } from "../constants/categories";
 
 export default function AddExpenseScreen() {
   const { colorScheme } = useColorScheme();
@@ -29,6 +30,10 @@ export default function AddExpenseScreen() {
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [type, setType] = useState<"income" | "expense">("expense");
+  const [category, setCategory] = useState("others");
+  const [paymentMode, setPaymentMode] = useState("cash");
+  const [tags, setTags] = useState("");
+  const [isRecurring, setIsRecurring] = useState(false);
   const [titleError, setTitleError] = useState("");
   const [amountError, setAmountError] = useState("");
 
@@ -37,6 +42,10 @@ export default function AddExpenseScreen() {
       setTitle(params.title as string);
       setAmount(params.amount as string);
       setType((params.type as "income" | "expense") || "expense");
+      setCategory((params.category as string) || "others");
+      setPaymentMode((params.payment_mode as string) || "cash");
+      setTags((params.tags as string) || "");
+      setIsRecurring(params.is_recurring === "1");
     }
   }, [params.id]);
 
@@ -75,6 +84,19 @@ export default function AddExpenseScreen() {
     }
   };
 
+  const suggestCategory = (text: string) => {
+    if (category !== "others") return; // Don't override if user already picked
+    const t = text.toLowerCase();
+    if (t.includes("food") || t.includes("eat") || t.includes("restaurant") || t.includes("grocery") || t.includes("dinner") || t.includes("lunch")) setCategory("food");
+    else if (t.includes("uber") || t.includes("ola") || t.includes("petrol") || t.includes("fuel") || t.includes("bus") || t.includes("train") || t.includes("travel")) setCategory("transport");
+    else if (t.includes("amazon") || t.includes("flipkart") || t.includes("shop") || t.includes("cloth") || t.includes("mall")) setCategory("shopping");
+    else if (t.includes("movie") || t.includes("netflix") || t.includes("game") || t.includes("party")) setCategory("entertainment");
+    else if (t.includes("doctor") || t.includes("med") || t.includes("hospital") || t.includes("health")) setCategory("health");
+    else if (t.includes("rent") || t.includes("bill") || t.includes("electricity") || t.includes("water") || t.includes("wifi") || t.includes("recharge")) setCategory("bills");
+    else if (t.includes("school") || t.includes("college") || t.includes("course") || t.includes("book")) setCategory("education");
+    else if (t.includes("salary") || t.includes("paycheck") || t.includes("income")) setCategory("salary");
+  };
+
   const saveExpense = async () => {
     let hasError = false;
     if (!title.trim()) {
@@ -94,14 +116,14 @@ export default function AddExpenseScreen() {
     try {
       if (expenseId) {
         await db.runAsync(
-          "UPDATE expenses SET title=?, amount=?, type=?, updated_at=? WHERE id=?;",
-          [title, parseFloat(amount), type, now(), expenseId],
+          "UPDATE expenses SET title=?, amount=?, type=?, category=?, payment_mode=?, tags=?, is_recurring=?, updated_at=? WHERE id=?;",
+          [title, parseFloat(amount), type, category, paymentMode, tags, isRecurring ? 1 : 0, now(), expenseId],
         );
         showNotification("Transaction updated successfully!", "success");
       } else {
         await db.runAsync(
-          "INSERT INTO expenses (title, amount, type, created_at, updated_at) VALUES (?, ?, ?, ?, ?);",
-          [title, parseFloat(amount), type, now(), now()],
+          "INSERT INTO expenses (title, amount, type, category, payment_mode, tags, is_recurring, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);",
+          [title, parseFloat(amount), type, category, paymentMode, tags, isRecurring ? 1 : 0, now(), now()],
         );
         showNotification("Transaction added successfully!", "success");
       }
@@ -175,6 +197,7 @@ export default function AddExpenseScreen() {
               onChangeText={(text) => {
                 setTitle(text);
                 if (titleError) setTitleError("");
+                suggestCategory(text);
               }}
               placeholder="e.g., Grocery Shopping"
               placeholderTextColor={theme.gray}
@@ -182,12 +205,32 @@ export default function AddExpenseScreen() {
             />
           </View>
           {titleError ? (
-            <Text className="text-red-500 text-xs ml-1 mb-6 font-bold">
+            <Text className="text-red-500 text-xs ml-1 mb-4 font-bold">
               {titleError}
             </Text>
           ) : (
-            <View className="mb-6" />
+            <View className="mb-4" />
           )}
+
+          <Text className="text-gray-400 font-bold text-xs mb-3 uppercase tracking-widest ml-1">
+            Tags (Optional)
+          </Text>
+          <View
+            className="flex-row items-center bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-3 mb-6 border border-gray-100 dark:border-gray-700"
+          >
+            <Ionicons
+              name="pricetag-outline"
+              size={18}
+              color={theme.gray}
+            />
+            <TextInput
+              value={tags}
+              onChangeText={setTags}
+              placeholder="e.g., breakfast, monthly, trip"
+              placeholderTextColor={theme.gray}
+              className="flex-1 ml-3 text-sm text-black dark:text-white"
+            />
+          </View>
 
           <Text className="text-gray-400 font-bold text-xs mb-3 uppercase tracking-widest ml-1">
             Amount (₹)
@@ -218,6 +261,82 @@ export default function AddExpenseScreen() {
               {amountError}
             </Text>
           )}
+
+          <Text className="text-gray-400 font-bold text-xs mt-6 mb-3 uppercase tracking-widest ml-1">
+            Category
+          </Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            className="flex-row mb-2"
+          >
+            {(type === "expense" ? CATEGORIES : INCOME_CATEGORIES).map((cat) => (
+              <TouchableOpacity
+                key={cat.id}
+                onPress={() => setCategory(cat.id)}
+                className={`items-center p-3 rounded-2xl mr-3 border-2 ${category === cat.id ? "border-cyan-800 bg-cyan-50 dark:bg-cyan-900/20" : "border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800"}`}
+                style={{ width: 100 }}
+              >
+                <Ionicons
+                  name={cat.icon as any}
+                  size={24}
+                  color={category === cat.id ? "#0e7490" : "#94a3b8"}
+                />
+                <Text
+                  className={`text-[10px] font-bold mt-1 text-center ${category === cat.id ? "text-cyan-800 dark:text-cyan-400" : "text-gray-500"}`}
+                >
+                  {cat.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          <Text className="text-gray-400 font-bold text-xs mt-6 mb-3 uppercase tracking-widest ml-1">
+            Payment Mode
+          </Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            className="flex-row mb-2"
+          >
+            {PAYMENT_MODES.map((mode) => (
+              <TouchableOpacity
+                key={mode.id}
+                onPress={() => setPaymentMode(mode.id)}
+                className={`flex-row items-center px-4 py-3 rounded-2xl mr-3 border-2 ${paymentMode === mode.id ? "border-cyan-800 bg-cyan-50 dark:bg-cyan-900/20" : "border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800"}`}
+              >
+                <Ionicons
+                  name={mode.icon as any}
+                  size={20}
+                  color={paymentMode === mode.id ? "#0e7490" : "#94a3b8"}
+                />
+                <Text
+                  className={`text-xs font-bold ml-2 ${paymentMode === mode.id ? "text-cyan-800 dark:text-cyan-400" : "text-gray-500"}`}
+                >
+                  {mode.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          <View className="flex-row items-center justify-between mt-6 px-1">
+            <View>
+              <Text className="text-black dark:text-white font-bold text-lg">
+                Recurring
+              </Text>
+              <Text className="text-gray-500 text-xs">
+                Repeat this transaction every month
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => setIsRecurring(!isRecurring)}
+              className={`w-14 h-8 rounded-full p-1 ${isRecurring ? "bg-cyan-800" : "bg-gray-300 dark:bg-gray-700"}`}
+            >
+              <View
+                className={`w-6 h-6 rounded-full bg-white shadow-sm ${isRecurring ? "translate-x-6" : ""}`}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View className="gap-y-4">

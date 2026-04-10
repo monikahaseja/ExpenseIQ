@@ -1,4 +1,5 @@
 import { db, getBudget, getSetting, saveSetting } from "../db/database";
+import { CATEGORIES } from "../constants/categories";
 
 // ─── Types ───────────────────────────────────────────────────────
 export interface FinancialSummary {
@@ -7,14 +8,15 @@ export interface FinancialSummary {
   netBalance: number;
   budgetLimit: number;
   budgetUsedPercent: number;
-  topExpenses: { title: string; amount: number }[];
+  topExpenses: { title: string; amount: number; category?: string }[];
+  categoryBreakdown: { [key: string]: number };
   transactionCount: number;
   avgExpense: number;
   lastMonthExpenses: number;
   lastMonthIncome: number;
   spendingTrend: "up" | "down" | "same" | "no_data";
   monthLabel: string;
-  allTransactions: { title: string; amount: number; type: string; created_at: string }[];
+  allTransactions: { title: string; amount: number; type: string; category?: string; created_at: string }[];
 }
 
 export interface Insight {
@@ -53,22 +55,27 @@ export async function getFinancialSummary(): Promise<FinancialSummary> {
     title: string;
     amount: number;
     type: string;
+    category: string;
     created_at: string;
   }>(
-    "SELECT title, amount, type, created_at FROM expenses WHERE created_at LIKE ? ORDER BY amount DESC;",
+    "SELECT title, amount, type, category, created_at FROM expenses WHERE created_at LIKE ? ORDER BY amount DESC;",
     [`${monthKey}%`]
   );
 
   let totalIncome = 0;
   let totalExpenses = 0;
-  const expenseItems: { title: string; amount: number }[] = [];
+  const categoryBreakdown: { [key: string]: number } = {};
+  const expenseItems: { title: string; amount: number; category: string }[] = [];
 
   rows.forEach((row) => {
     if (row.type === "income") {
       totalIncome += row.amount;
     } else {
       totalExpenses += row.amount;
-      expenseItems.push({ title: row.title, amount: row.amount });
+      expenseItems.push({ title: row.title, amount: row.amount, category: row.category });
+      
+      const cat = row.category || "others";
+      categoryBreakdown[cat] = (categoryBreakdown[cat] || 0) + row.amount;
     }
   });
 
@@ -116,6 +123,7 @@ export async function getFinancialSummary(): Promise<FinancialSummary> {
     budgetLimit,
     budgetUsedPercent,
     topExpenses: expenseItems.slice(0, 5),
+    categoryBreakdown,
     transactionCount: rows.length,
     avgExpense:
       expenseOnlyRows.length > 0
@@ -294,8 +302,25 @@ async function handleLiteQuery(q: string, s: FinancialSummary): Promise<string> 
     return `🎯 Your budget for ${s.monthLabel} is **₹${s.budgetLimit.toFixed(0)}**. You've used **${s.budgetUsedPercent.toFixed(0)}%** so far. You have **₹${remaining.toFixed(0)}** remaining for the rest of the month. ${s.budgetUsedPercent > 90 ? "Be careful, you're almost at the limit! ⚠️" : "You're doing well! 👍"}`;
   }
 
-  // 3. Search for specific categories
-  const matchedTransactions = s.allTransactions.filter(t => query.includes(t.title.toLowerCase()) || q.toLowerCase().includes(t.title.toLowerCase()));
+  // 3. Search for specific categories/items
+  const matchedTransactions = s.allTransactions.filter(t => 
+    query.includes(t.title.toLowerCase()) || 
+    q.toLowerCase().includes(t.title.toLowerCase()) ||
+    (t.category && query.includes(t.category.toLowerCase()))
+  );
+  
+  if (query.includes("category") || query.includes("breakdown") || query.includes("where my money goes")) {
+    const sortedCats = Object.entries(s.categoryBreakdown).sort((a,b) => b[1] - a[1]);
+    if (sortedCats.length === 0) return "You haven't added any expenses with categories yet! Start adding them so I can show you your spending breakdown.";
+    
+    let resp = "📊 **Category Breakdown:**\n\n";
+    sortedCats.forEach(([catId, amount]) => {
+        const cat = CATEGORIES.find(c => c.id === catId);
+        resp += `• **${cat?.name || catId}**: ₹${amount.toFixed(0)} (${((amount/s.totalExpenses)*100).toFixed(0)}%)\n`;
+    });
+    return resp + `\n💡 Your biggest spending is on **${CATEGORIES.find(c => c.id === sortedCats[0][0])?.name || sortedCats[0][0]}**. Try searching for tips on how to save in this category!`;
+  }
+
   if (matchedTransactions.length > 0) {
     const total = matchedTransactions.reduce((acc, t) => acc + t.amount, 0);
     return `🔍 I found **${matchedTransactions.length}** transactions matching your search:\n\n${matchedTransactions.map(t => `• ${t.title}: ₹${t.amount}`).join('\n')}\n\n**Total:** ₹${total.toFixed(0)}\n\n💡 ${getAdviceByKeyword(q, total)}`;

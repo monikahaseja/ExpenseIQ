@@ -9,6 +9,10 @@ export const initDB = async () => {
       title TEXT,
       amount REAL,
       type TEXT DEFAULT 'expense', -- 'income' or 'expense'
+      category TEXT,
+      payment_mode TEXT,
+      tags TEXT,
+      is_recurring INTEGER DEFAULT 0,
       created_at TEXT,
       updated_at TEXT
     );
@@ -27,6 +31,22 @@ export const initDB = async () => {
 
   try {
     await db.execAsync("ALTER TABLE expenses ADD COLUMN type TEXT DEFAULT 'expense';");
+  } catch (e) {}
+
+  try {
+    await db.execAsync("ALTER TABLE expenses ADD COLUMN category TEXT;");
+  } catch (e) {}
+
+  try {
+    await db.execAsync("ALTER TABLE expenses ADD COLUMN payment_mode TEXT;");
+  } catch (e) {}
+
+  try {
+    await db.execAsync("ALTER TABLE expenses ADD COLUMN tags TEXT;");
+  } catch (e) {}
+
+  try {
+    await db.execAsync("ALTER TABLE expenses ADD COLUMN is_recurring INTEGER DEFAULT 0;");
   } catch (e) {}
 
   await db.execAsync(`
@@ -49,6 +69,19 @@ export const initDB = async () => {
       message TEXT,
       type TEXT DEFAULT 'info',
       is_read INTEGER DEFAULT 0,
+      created_at TEXT
+    );
+  `);
+
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS goals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT,
+      target_amount REAL,
+      current_amount REAL DEFAULT 0,
+      deadline TEXT,
+      icon TEXT,
+      color TEXT,
       created_at TEXT
     );
   `);

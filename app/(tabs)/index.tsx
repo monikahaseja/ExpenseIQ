@@ -45,6 +45,41 @@ export default function HomeScreen() {
       );
       setExpenses(rows);
 
+      // Simple Recurring Suggestion logic
+      const lastMonth = new Date(currentDate);
+      lastMonth.setMonth(lastMonth.getMonth() - 1);
+      const lastMonthStr = `${lastMonth.getFullYear()}-${(lastMonth.getMonth() + 1).toString().padStart(2, "0")}`;
+      
+      const recurringRows = await db.getAllAsync<Expense>(
+          "SELECT * FROM expenses WHERE is_recurring = 1 AND (strftime('%Y-%m', created_at) = ? OR created_at LIKE ?);",
+          [lastMonthStr, `${lastMonthStr}%`]
+      );
+
+      if (recurringRows.length > 0 && rows.length > 0) {
+          const alreadyAddedTitles = new Set(rows.map(r => r.title));
+          const toSuggest = recurringRows.filter(r => !alreadyAddedTitles.has(r.title));
+          
+          if (toSuggest.length > 0) {
+              Alert.alert(
+                  "Recurring transactions",
+                  `Found ${toSuggest.length} recurring transactions from last month. Would you like to add them for ${formattedMonth}?`,
+                  [
+                      { text: "No", style: "cancel" },
+                      { text: "Yes", onPress: async () => {
+                          for (const rs of toSuggest) {
+                              await db.runAsync(
+                                  "INSERT INTO expenses (title, amount, type, category, payment_mode, tags, is_recurring, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                                  [rs.title, rs.amount, rs.type, rs.category || 'others', rs.payment_mode || 'cash', rs.tags || '', 1, new Date().toISOString(), new Date().toISOString()]
+                              );
+                          }
+                          fetchExpenses();
+                          showNotification(`Added ${toSuggest.length} recurring transactions`, "success");
+                      }}
+                  ]
+              );
+          }
+      }
+
       const savedTitle = await getSetting("app_title");
       if (savedTitle) setAppTitle(savedTitle);
 
@@ -354,6 +389,9 @@ export default function HomeScreen() {
                     title: expense.title,
                     amount: expense.amount,
                     type: expense.type,
+                    category: expense.category,
+                    payment_mode: expense.payment_mode,
+                    is_recurring: expense.is_recurring?.toString(),
                   },
                 })
               }
