@@ -39,14 +39,14 @@ export default function HomeScreen() {
       if (user) {
         setLoading(true);
         try {
-          const response = await axios.get(`${API_URL}/expenses`, { params: { month } });
+          const response = await axios.get(`${API_URL}/transactions`, { params: { month } });
           rows = response.data.data
             .filter((e: any) => e.created_at && e.created_at.startsWith(monthStr))
             .map((e: any) => ({ ...e, id: e.id || e._id }));
         } catch (e) {
           console.error("API fetch failed, falling back to local storage", e);
           rows = await db.getAllAsync<Expense>(
-            "SELECT * FROM expenses WHERE strftime('%Y-%m', created_at) = ? OR created_at LIKE ? ORDER BY id DESC;",
+            "SELECT * FROM transactions WHERE strftime('%Y-%m', created_at) = ? OR created_at LIKE ? ORDER BY id DESC;",
             [monthStr, `${monthStr}%`],
           );
         } finally {
@@ -54,7 +54,7 @@ export default function HomeScreen() {
         }
       } else {
         rows = await db.getAllAsync<Expense>(
-          "SELECT * FROM expenses WHERE strftime('%Y-%m', created_at) = ? OR created_at LIKE ? ORDER BY id DESC;",
+          "SELECT * FROM transactions WHERE strftime('%Y-%m', created_at) = ? OR created_at LIKE ? ORDER BY id DESC;",
           [monthStr, `${monthStr}%`],
         );
       }
@@ -67,7 +67,7 @@ export default function HomeScreen() {
       const lastMonthStr = `${lastMonth.getFullYear()}-${(lastMonth.getMonth() + 1).toString().padStart(2, "0")}`;
       
       const recurringRows = await db.getAllAsync<Expense>(
-          "SELECT * FROM expenses WHERE is_recurring = 1 AND (strftime('%Y-%m', created_at) = ? OR created_at LIKE ?);",
+          "SELECT * FROM transactions WHERE is_recurring = 1 AND (strftime('%Y-%m', created_at) = ? OR created_at LIKE ?);",
           [lastMonthStr, `${lastMonthStr}%`]
       );
 
@@ -84,7 +84,7 @@ export default function HomeScreen() {
                       { text: "Yes", onPress: async () => {
                           for (const rs of toSuggest) {
                               await db.runAsync(
-                                  "INSERT INTO expenses (title, amount, type, category, payment_mode, tags, is_recurring, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                                  "INSERT INTO transactions (title, amount, type, category, payment_mode, tags, is_recurring, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);",
                                   [rs.title, rs.amount, rs.type, rs.category || 'others', rs.payment_mode || 'cash', rs.tags || '', 1, new Date().toISOString(), new Date().toISOString()]
                               );
                           }
@@ -164,12 +164,12 @@ export default function HomeScreen() {
         onPress: async () => {
           if (user) {
             try {
-              await axios.delete(`${API_URL}/expenses/${id}`);
+              await axios.delete(`${API_URL}/transactions/${id}`);
             } catch (e) {
               console.error("Backend delete failed", e);
             }
           }
-          await db.runAsync("DELETE FROM expenses WHERE id=?;", [id]);
+          await db.runAsync("DELETE FROM transactions WHERE id=?;", [id]);
           fetchExpenses();
           showNotification("Expense deleted successfully", "success");
         },

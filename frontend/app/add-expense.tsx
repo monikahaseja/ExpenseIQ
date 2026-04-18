@@ -82,7 +82,7 @@ export default function AddExpenseScreen() {
       if (budgetLimit <= 0) return;
 
       const rows = await db.getAllAsync<{ amount: number; type: string }>(
-        "SELECT amount, type FROM expenses WHERE created_at LIKE ?;",
+        "SELECT amount, type FROM transactions WHERE created_at LIKE ?;",
         [`${monthKey}%`],
       );
 
@@ -154,9 +154,9 @@ export default function AddExpenseScreen() {
       // 1. Save to Backend (Primary)
       if (user) {
         if (expenseId) {
-          await axios.put(`${API_URL}/expenses/${expenseId}`, expenseData);
+          await axios.put(`${API_URL}/transactions/${expenseId}`, expenseData);
         } else {
-          await axios.post(`${API_URL}/expenses`, expenseData);
+          await axios.post(`${API_URL}/transactions`, expenseData);
         }
       }
 
@@ -164,12 +164,12 @@ export default function AddExpenseScreen() {
       try {
         if (expenseId && !isNaN(Number(expenseId))) {
           await db.runAsync(
-            "UPDATE expenses SET title=?, amount=?, type=?, category=?, payment_mode=?, tags=?, is_recurring=?, updated_at=? WHERE id=?;",
+            "UPDATE transactions SET title=?, amount=?, type=?, category=?, payment_mode=?, tags=?, is_recurring=?, updated_at=? WHERE id=?;",
             [title, parseFloat(amount), type, finalCategory, paymentMode, tags, isRecurring ? 1 : 0, now(), Number(expenseId)],
           );
         } else if (!expenseId) {
           await db.runAsync(
-            "INSERT INTO expenses (title, amount, type, category, payment_mode, tags, is_recurring, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);",
+            "INSERT INTO transactions (title, amount, type, category, payment_mode, tags, is_recurring, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);",
             [title, parseFloat(amount), type, finalCategory, paymentMode, tags, isRecurring ? 1 : 0, now(), now()],
           );
         }

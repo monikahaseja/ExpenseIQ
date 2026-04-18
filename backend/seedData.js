@@ -1,7 +1,6 @@
 const mongoose = require('mongoose');
 const User = require('./models/User');
 const AppName = require('./models/AppName');
-const Theme = require('./models/Theme');
 const Budget = require('./models/Budget');
 require('dotenv').config();
 
@@ -13,7 +12,7 @@ const seedExistingData = async () => {
         console.log('Connected to MongoDB');
 
         const users = await User.find();
-        console.log(`Found ${users.length} users. Checking missing appnames, budgets, and themes...`);
+        console.log(`Found ${users.length} users. Checking missing appnames and budgets...`);
 
         const currentDate = new Date();
         const month = (currentDate.getMonth() + 1).toString().padStart(2, "0");
@@ -29,16 +28,6 @@ const seedExistingData = async () => {
                   console.log(`Seeded default AppName for user: ${user.name}`);
              } else {
                   console.log(`User ${user.name} already has an AppName.`);
-             }
-
-             // Theme Seed
-             let theme = await Theme.findOne({ userId: user._id });
-             if (!theme) {
-                  const defaultTheme = new Theme({ userId: user._id, mode: 'light' });
-                  await defaultTheme.save();
-                  console.log(`Seeded default Theme for user: ${user.name}`);
-             } else {
-                  console.log(`User ${user.name} already has a Theme.`);
              }
 
              // Budget Seed

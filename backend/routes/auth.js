@@ -4,7 +4,6 @@ const User = require('../models/User');
 const auth = require('../middleware/auth');
 const jwt = require('jsonwebtoken');
 const AppName = require('../models/AppName');
-const Theme = require('../models/Theme');
 
 // Signup
 router.post('/signup', async (req, res) => {
@@ -23,9 +22,6 @@ router.post('/signup', async (req, res) => {
         // Seed distinct configurations into dedicated default tables
         const defaultAppName = new AppName({ userId: user._id });
         await defaultAppName.save();
-
-        const defaultTheme = new Theme({ userId: user._id });
-        await defaultTheme.save();
 
         const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
         

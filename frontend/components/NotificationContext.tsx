@@ -17,6 +17,7 @@ import {
 import axios from "axios";
 import { API_URL } from "../constants/api";
 import { useAuth } from "../context/AuthContext";
+import { saveNotification } from "../db/database";
 
 type NotificationType = "success" | "error" | "warning" | "info";
 
@@ -123,12 +124,8 @@ export function NotificationProvider({
         clearTimeout(timeoutRef.current);
       }
 
-      // Persist to backend if token exists
-      if (token) {
-        axios.post(`${API_URL}/notifications`, { message, type }, {
-          headers: { Authorization: `Bearer ${token}` }
-        }).catch(err => console.error("Error saving notification to backend:", err));
-      }
+      // Persist to local DB
+      saveNotification(message, type);
 
       // Reset position
       translateY.setValue(-120);

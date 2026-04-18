@@ -58,7 +58,7 @@ export async function getFinancialSummary(): Promise<FinancialSummary> {
     category: string;
     created_at: string;
   }>(
-    "SELECT title, amount, type, category, created_at FROM expenses WHERE created_at LIKE ? ORDER BY amount DESC;",
+    "SELECT title, amount, type, category, created_at FROM transactions WHERE created_at LIKE ? ORDER BY amount DESC;",
     [`${monthKey}%`]
   );
 
@@ -88,7 +88,7 @@ export async function getFinancialSummary(): Promise<FinancialSummary> {
     amount: number;
     type: string;
   }>(
-    "SELECT amount, type FROM expenses WHERE created_at LIKE ?;",
+    "SELECT amount, type FROM transactions WHERE created_at LIKE ?;",
     [`${lastMonthKey}%`]
   );
 

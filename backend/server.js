@@ -25,12 +25,10 @@ app.use((req, res, next) => {
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
-app.use('/api/expenses', require('./routes/expenses'));
+app.use('/api/transactions', require('./routes/transactions'));
 app.use('/api/goals', require('./routes/goals'));
-app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/budgets', require('./routes/budgets'));
 app.use('/api/appnames', require('./routes/appnames'));
-app.use('/api/themes', require('./routes/themes'));
 app.use('/api/analytics', require('./routes/analytics'));
 
 // Health check

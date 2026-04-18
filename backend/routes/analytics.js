@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
-const Expense = require('../models/Expense');
+const Transaction = require('../models/Transaction');
 const Budget = require('../models/Budget');
 
 // @route   GET /api/analytics
@@ -26,7 +26,7 @@ router.get('/', auth, async (req, res) => {
         }
 
 
-        const expenses = await Expense.find(query);
+        const expenses = await Transaction.find(query);
         const budget = await Budget.findOne({ userId, month });
 
         res.json({

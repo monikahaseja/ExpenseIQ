@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const User = require('./models/User');
-const Expense = require('./models/Expense');
+const Transaction = require('./models/Transaction');
 require('dotenv').config();
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/expenseiq';
@@ -21,7 +21,7 @@ const seedData = async () => {
         console.log(`Seeding data for user: ${user.name}`);
 
         // Delete existing expenses to start fresh (optional, but requested for checking analytics cleanly)
-        await Expense.deleteMany({ userId });
+        await Transaction.deleteMany({ userId });
         console.log('Cleared old expenses');
 
         const currentYear = new Date().getFullYear();
@@ -48,7 +48,7 @@ const seedData = async () => {
             userId,
         }));
 
-        await Expense.insertMany(recordsToInsert);
+        await Transaction.insertMany(recordsToInsert);
         console.log(`Successfully seeded ${recordsToInsert.length} transactions for analytics testing!`);
         
         mongoose.connection.close();

@@ -46,9 +46,9 @@ export default function ExpenseDetailsScreen() {
                 onPress: async () => {
                     try {
                         if (user) {
-                            await axios.delete(`${API_URL}/expenses/${id}`);
+                            await axios.delete(`${API_URL}/transactions/${id}`);
                         }
-                        await db.runAsync("DELETE FROM expenses WHERE id=?;", [id]);
+                        await db.runAsync("DELETE FROM transactions WHERE id=?;", [id]);
                         router.back();
                     } catch (error) {
                         console.error("Delete failed:", error);

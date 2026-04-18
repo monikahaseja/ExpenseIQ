@@ -4,7 +4,7 @@ export const db: SQLiteDatabase = openDatabaseSync("expenses.db");
 
 export const initDB = async () => {
   await db.execAsync(`
-    CREATE TABLE IF NOT EXISTS expenses (
+    CREATE TABLE IF NOT EXISTS transactions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT,
       amount REAL,
@@ -18,35 +18,41 @@ export const initDB = async () => {
     );
   `);
   
+  // Migration to rename expenses to transactions if it exists
+  try {
+    await db.execAsync("ALTER TABLE expenses RENAME TO transactions;");
+    console.log("Renamed expenses table to transactions");
+  } catch (e) {
+    // Table might already be renamed or doesn't exist
+  }
+
   // Migration to add columns if they don't exist
   try {
-    await db.execAsync("ALTER TABLE expenses ADD COLUMN created_at TEXT;");
-  } catch (e) {
-    // Column likely already exists
-  }
+    await db.execAsync("ALTER TABLE transactions ADD COLUMN created_at TEXT;");
+  } catch (e) {}
   
   try {
-    await db.execAsync("ALTER TABLE expenses ADD COLUMN updated_at TEXT;");
+    await db.execAsync("ALTER TABLE transactions ADD COLUMN updated_at TEXT;");
   } catch (e) {}
 
   try {
-    await db.execAsync("ALTER TABLE expenses ADD COLUMN type TEXT DEFAULT 'expense';");
+    await db.execAsync("ALTER TABLE transactions ADD COLUMN type TEXT DEFAULT 'expense';");
   } catch (e) {}
 
   try {
-    await db.execAsync("ALTER TABLE expenses ADD COLUMN category TEXT;");
+    await db.execAsync("ALTER TABLE transactions ADD COLUMN category TEXT;");
   } catch (e) {}
 
   try {
-    await db.execAsync("ALTER TABLE expenses ADD COLUMN payment_mode TEXT;");
+    await db.execAsync("ALTER TABLE transactions ADD COLUMN payment_mode TEXT;");
   } catch (e) {}
 
   try {
-    await db.execAsync("ALTER TABLE expenses ADD COLUMN tags TEXT;");
+    await db.execAsync("ALTER TABLE transactions ADD COLUMN tags TEXT;");
   } catch (e) {}
 
   try {
-    await db.execAsync("ALTER TABLE expenses ADD COLUMN is_recurring INTEGER DEFAULT 0;");
+    await db.execAsync("ALTER TABLE transactions ADD COLUMN is_recurring INTEGER DEFAULT 0;");
   } catch (e) {}
 
   await db.execAsync(`
