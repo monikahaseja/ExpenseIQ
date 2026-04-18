@@ -13,15 +13,17 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors } from "../../constants/colors";
 import { useNotification } from "../../components/NotificationContext";
-import {
-  NotificationRecord,
-  getNotifications,
-  deleteNotification,
-  clearAllNotifications,
-  markAsRead,
-  markAllAsRead,
-  getUnreadCount,
-} from "../../db/database";
+import axios from "axios";
+import { API_URL } from "../../constants/api";
+import { useAuth } from "../../context/AuthContext";
+
+export interface NotificationRecord {
+  id: string;
+  message: string;
+  type: string;
+  is_read: boolean;
+  created_at: string;
+}
 
 const ICON_MAP: Record<string, keyof typeof Ionicons.glyphMap> = {
   success: "checkmark-circle",
@@ -108,11 +110,20 @@ export default function NotificationsScreen() {
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
+  const { token } = useAuth();
+  
   const loadNotifications = async () => {
-    const data = await getNotifications();
-    setNotifications(data);
-    const count = await getUnreadCount();
-    setUnreadCount(count);
+    if (!token) return;
+    try {
+      const response = await axios.get(`${API_URL}/notifications`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data: NotificationRecord[] = response.data.data;
+      setNotifications(data);
+      setUnreadCount(data.filter(n => !n.is_read).length);
+    } catch (e) {
+      console.error("Error loading notifications:", e);
+    }
   };
 
   useFocusEffect(
@@ -121,23 +132,35 @@ export default function NotificationsScreen() {
     }, []),
   );
 
-  const handleMarkAsRead = async (id: number, isRead: number) => {
-    if (isRead === 0) {
-      await markAsRead(id);
-      loadNotifications();
+  const handleMarkAsRead = async (id: string, isRead: boolean) => {
+    if (!isRead) {
+      try {
+        await axios.put(`${API_URL}/notifications/${id}/read`, {}, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        loadNotifications();
+      } catch (e) {
+        console.error("Error marking as read:", e);
+      }
     }
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = (id: string) => {
     Alert.alert("Delete Notification", "Remove this notification?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
         style: "destructive",
         onPress: async () => {
-          await deleteNotification(id);
-          loadNotifications();
-          showNotification("Notification removed", "success");
+          try {
+            await axios.delete(`${API_URL}/notifications/${id}`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            loadNotifications();
+            showNotification("Notification removed", "success");
+          } catch (e) {
+             console.error("Error deleting notification:", e);
+          }
         },
       },
     ]);
@@ -154,10 +177,17 @@ export default function NotificationsScreen() {
           text: "Clear All",
           style: "destructive",
           onPress: async () => {
-            await clearAllNotifications();
-            setNotifications([]);
-            setUnreadCount(0);
-            showNotification("All notifications cleared", "success");
+            try {
+              await axios.delete(`${API_URL}/notifications/all`, {
+                headers: { Authorization: `Bearer ${token}` }
+              });
+              setNotifications([]);
+              setUnreadCount(0);
+              showNotification("All notifications cleared", "success");
+            } catch (e) {
+               console.error("Error clearing notifications:", e);
+               showNotification("Failed to clear notifications", "error");
+            }
           },
         },
       ],
@@ -166,8 +196,14 @@ export default function NotificationsScreen() {
 
   const handleMarkAllRead = async () => {
     if (unreadCount === 0) return;
-    await markAllAsRead();
-    loadNotifications();
+    try {
+      await axios.put(`${API_URL}/notifications/read-all`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      loadNotifications();
+    } catch (e) {
+       console.error("Error marking all read:", e);
+    }
   };
 
   const colorMap = isDark ? DARK_COLOR_MAP : COLOR_MAP;
@@ -175,7 +211,7 @@ export default function NotificationsScreen() {
   const renderItem = ({ item }: { item: NotificationRecord }) => {
     const colors = colorMap[item.type] || colorMap.info;
     const icon = ICON_MAP[item.type] || ICON_MAP.info;
-    const isUnread = item.is_read === 0;
+    const isUnread = !item.is_read;
 
     return (
       <TouchableOpacity

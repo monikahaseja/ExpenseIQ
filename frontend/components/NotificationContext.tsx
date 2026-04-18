@@ -14,7 +14,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { saveNotification } from "../db/database";
+import axios from "axios";
+import { API_URL } from "../constants/api";
+import { useAuth } from "../context/AuthContext";
 
 type NotificationType = "success" | "error" | "warning" | "info";
 
@@ -108,6 +110,8 @@ export function NotificationProvider({
     });
   }, [translateY, opacity]);
 
+  const { token } = useAuth();
+  
   const showNotification = useCallback(
     (
       message: string,
@@ -119,8 +123,12 @@ export function NotificationProvider({
         clearTimeout(timeoutRef.current);
       }
 
-      // Persist to database
-      saveNotification(message, type);
+      // Persist to backend if token exists
+      if (token) {
+        axios.post(`${API_URL}/notifications`, { message, type }, {
+          headers: { Authorization: `Bearer ${token}` }
+        }).catch(err => console.error("Error saving notification to backend:", err));
+      }
 
       // Reset position
       translateY.setValue(-120);
@@ -148,7 +156,7 @@ export function NotificationProvider({
         hideNotification();
       }, duration);
     },
-    [translateY, opacity, hideNotification],
+    [translateY, opacity, hideNotification, token],
   );
 
   const colors = notification ? COLOR_MAP[notification.type] : COLOR_MAP.info;

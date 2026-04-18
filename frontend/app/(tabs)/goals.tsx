@@ -1,14 +1,16 @@
 import React, { useState, useCallback } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useColorScheme } from "nativewind";
 import { useFocusEffect } from "@react-navigation/native";
 import { Colors } from "../../constants/colors";
-import { db } from "../../db/database";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import axios from "axios";
+import { API_URL } from "../../constants/api";
+import { useAuth } from "../../context/AuthContext";
 
 interface Goal {
-  id: number;
+  id: string;
   title: string;
   target_amount: number;
   current_amount: number;
@@ -17,26 +19,31 @@ interface Goal {
   color: string;
 }
 
-const GOAL_ICONS = ["vocation", "car", "home", "laptop", "airplane", "heart", "star", "gift", "pizza"];
+const GOAL_ICONS = ["briefcase", "car", "home", "laptop", "airplane", "heart", "star", "gift", "pizza"];
 const GOAL_COLORS = ["#f87171", "#60a5fa", "#4ade80", "#fbbf24", "#a78bfa", "#f472b6", "#fb7185", "#3b82f6", "#10b981"];
 
 export default function GoalsScreen() {
   const { colorScheme } = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
   const isDark = colorScheme === "dark";
+  const { token } = useAuth();
 
   const [goals, setGoals] = useState<Goal[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [title, setTitle] = useState("");
   const [targetAmount, setTargetAmount] = useState("");
   const [currentAmount, setCurrentAmount] = useState("");
-  const [selectedIcon, setSelectedIcon] = useState("vocation");
+  const [selectedIcon, setSelectedIcon] = useState("briefcase");
   const [selectedColor, setSelectedColor] = useState("#60a5fa");
+  const [loading, setLoading] = useState(false);
 
   const fetchGoals = async () => {
+    if (!token) return;
     try {
-      const rows = await db.getAllAsync<Goal>("SELECT * FROM goals ORDER BY id DESC;");
-      setGoals(rows);
+      const response = await axios.get(`${API_URL}/goals`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setGoals(response.data.data);
     } catch (e) {
       console.error("Error fetching goals:", e);
     }
@@ -45,7 +52,7 @@ export default function GoalsScreen() {
   useFocusEffect(
     useCallback(() => {
       fetchGoals();
-    }, [])
+    }, [token])
   );
 
   const saveGoal = async () => {
@@ -54,37 +61,68 @@ export default function GoalsScreen() {
       return;
     }
 
+    setLoading(true);
     try {
-      await db.runAsync(
-        "INSERT INTO goals (title, target_amount, current_amount, icon, color, created_at) VALUES (?, ?, ?, ?, ?, ?);",
-        [title, parseFloat(targetAmount), parseFloat(currentAmount || "0"), selectedIcon, selectedColor, new Date().toISOString()]
-      );
+      await axios.post(`${API_URL}/goals`, {
+        title,
+        target_amount: parseFloat(targetAmount),
+        current_amount: parseFloat(currentAmount || "0"),
+        icon: selectedIcon,
+        color: selectedColor,
+        deadline: new Date().toISOString()
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
       setModalVisible(false);
-      resetForm();
+      setTitle("");
+      setTargetAmount("");
+      setCurrentAmount("");
       fetchGoals();
     } catch (e) {
       console.error("Error saving goal:", e);
+      Alert.alert("Error", "Failed to save goal.");
+    } finally {
+      setLoading(false);
     }
   };
 
   const updateGoalProgress = async (goal: Goal, amount: number) => {
-      try {
-          const newAmount = goal.current_amount + amount;
-          await db.runAsync("UPDATE goals SET current_amount = ? WHERE id = ?;", [newAmount, goal.id]);
-          fetchGoals();
-      } catch (e) {
-          console.error("Error updating goal:", e);
-      }
+    try {
+      await axios.put(`${API_URL}/goals/${goal.id}/progress`, {
+        amount
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchGoals();
+    } catch (e) {
+      console.error("Error updating progress:", e);
+      Alert.alert("Error", "Failed to update progress.");
+    }
   };
 
-  const deleteGoal = (id: number) => {
-    Alert.alert("Delete Goal", "Are you sure?", [
+  const deleteGoal = async (id: string) => {
+    Alert.alert(
+      "Delete Goal",
+      "Are you sure you want to delete this goal?",
+      [
         { text: "Cancel", style: "cancel" },
-        { text: "Delete", style: "destructive", onPress: async () => {
-            await db.runAsync("DELETE FROM goals WHERE id = ?;", [id]);
-            fetchGoals();
-        }}
-    ]);
+        { 
+          text: "Delete", 
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await axios.delete(`${API_URL}/goals/${id}`, {
+                headers: { Authorization: `Bearer ${token}` }
+              });
+              fetchGoals();
+            } catch (e) {
+              console.error("Error deleting goal:", e);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const resetForm = () => {

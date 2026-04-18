@@ -33,8 +33,9 @@ export default function ExpenseDetailsScreen() {
         ? INCOME_CATEGORIES.find(c => c.id === categoryId) 
         : CATEGORIES.find(c => c.id === categoryId);
 
-    const categoryIcon = category?.icon || (isIncome ? "trending-up" : "trending-down");
-    const categoryColor = category?.color || (isIncome ? theme.success : theme.error);
+    const categoryIcon = category?.icon || (isIncome ? "trending-up" : "grid");
+    const categoryColor = category?.color || (isIncome ? theme.success : "#94a3b8");
+    const categoryName = category?.name || categoryId || "Others";
 
     const handleDelete = () => {
         Alert.alert("Delete Transaction", "Are you sure you want to delete this?", [
@@ -92,7 +93,7 @@ export default function ExpenseDetailsScreen() {
 
                 <View style={styles.infoGrid}>
                     <DetailItem label="Status" value={isIncome ? "Income" : "Expense"} icon="stats-chart" theme={theme} color={categoryColor} />
-                    <DetailItem label="Category" value={category?.name || "Other"} icon={categoryIcon} theme={theme} color={categoryColor} />
+                    <DetailItem label="Category" value={categoryName} icon={categoryIcon} theme={theme} color={categoryColor} />
                     <DetailItem label="Date" value={new Date(createdAt).toLocaleDateString(undefined, { dateStyle: 'long' })} icon="calendar" theme={theme} />
                     <DetailItem label="Payment" value={paymentMode.charAt(0).toUpperCase() + paymentMode.slice(1)} icon="card" theme={theme} />
                     {isRecurring && (

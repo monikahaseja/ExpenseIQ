@@ -3,7 +3,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useState, useCallback } from "react";
 import { useColorScheme } from "nativewind";
 import { useFocusEffect } from "@react-navigation/native";
-import { db, getBudget, saveBudget, getSetting, saveSetting } from "../../db/database";
+import { db } from "../../db/database";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Colors } from "../../constants/colors";
 import { useNotification } from "../../components/NotificationContext";
@@ -21,7 +21,7 @@ if (Platform.OS === 'android') {
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { user, updateProfile } = useAuth();
+  const { user, token, updateProfile } = useAuth();
   const { showNotification } = useNotification();
   const [isUploading, setIsUploading] = useState(false);
   const { colorScheme, toggleColorScheme } = useColorScheme();
@@ -44,20 +44,27 @@ export default function SettingsScreen() {
   };
 
   const loadMonthData = async () => {
+    if (!token) return;
     try {
       const monthKey = getCurrentMonthKey();
-      const limit = await getBudget(monthKey);
+      
+      // Fetch budget
+      const budgetRes = await axios.get(`${API_URL}/budgets?month=${monthKey}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const limit = budgetRes.data.data.length > 0 ? budgetRes.data.data[0].amount : 0;
       setBudgetLimit(limit > 0 ? limit.toString() : "");
       setLastSavedBudget(limit > 0 ? limit.toString() : "");
 
-      const rows = await db.getAllAsync<{ amount: number; type: string }>(
-        "SELECT amount, type FROM expenses WHERE created_at LIKE ?;",
-        [`${monthKey}%`]
-      );
+      // Fetch expenses
+      const expensesRes = await axios.get(`${API_URL}/analytics?month=${monthKey}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const expenses = expensesRes.data.data.expenses;
       
       let totalSpent = 0;
       let totalIncome = 0;
-      rows.forEach(item => {
+      expenses.forEach((item: any) => {
         if (item.type === 'income') totalIncome += item.amount;
         else totalSpent += item.amount;
       });
@@ -65,8 +72,13 @@ export default function SettingsScreen() {
       setSpent(totalSpent);
       setIncome(totalIncome);
 
-      const savedTitle = await getSetting("app_title");
-      if (savedTitle) setAppTitle(savedTitle);
+      // Fetch app name
+      const appNameRes = await axios.get(`${API_URL}/appnames`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (appNameRes.data?.data?.name) {
+        setAppTitle(appNameRes.data.data.name);
+      }
     } catch (e) {
       console.error("Error loading month data:", e);
     }
@@ -86,10 +98,13 @@ export default function SettingsScreen() {
   };
 
   const handleSaveBudget = async () => {
+    if (!token) return;
     try {
       const limit = parseFloat(budgetLimit) || 0;
       const monthKey = getCurrentMonthKey();
-      await saveBudget(monthKey, limit);
+      await axios.post(`${API_URL}/budgets`, { month: monthKey, amount: limit }, {
+         headers: { Authorization: `Bearer ${token}` }
+      });
       setLastSavedBudget(budgetLimit);
       showNotification(`Monthly budget set to ₹${limit}`, "success");
     } catch (e) {
@@ -210,11 +225,17 @@ export default function SettingsScreen() {
             />
             {!titleError && appTitle.trim().length > 0 && (
               <TouchableOpacity
-                onPress={() => {
-                  saveSetting("app_title", appTitle);
-                  setIsSaved(true);
-                  showNotification("App name updated!", "success");
-                  setTimeout(() => setIsSaved(false), 2000);
+                onPress={async () => {
+                  try {
+                    await axios.post(`${API_URL}/appnames`, { name: appTitle }, {
+                      headers: { Authorization: `Bearer ${token}` }
+                    });
+                    setIsSaved(true);
+                    showNotification("App name updated!", "success");
+                    setTimeout(() => setIsSaved(false), 2000);
+                  } catch (err) {
+                    console.error("Save title error", err);
+                  }
                 }}
               >
                 <Ionicons name="checkmark" size={20} color={theme.success} />

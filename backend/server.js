@@ -26,6 +26,12 @@ app.use((req, res, next) => {
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/expenses', require('./routes/expenses'));
+app.use('/api/goals', require('./routes/goals'));
+app.use('/api/notifications', require('./routes/notifications'));
+app.use('/api/budgets', require('./routes/budgets'));
+app.use('/api/appnames', require('./routes/appnames'));
+app.use('/api/themes', require('./routes/themes'));
+app.use('/api/analytics', require('./routes/analytics'));
 
 // Health check
 app.get('/health', (req, res) => res.send('API is running...'));
@@ -42,7 +48,7 @@ mongoose.connect(MONGO_URI)
         app.listen(PORT, '0.0.0.0', () => {
             console.log(`🚀 Server is up and running on all interfaces!`);
             console.log(`📡 Local: http://localhost:${PORT}`);
-            console.log(`🔗 API Base URL: http://192.168.0.116:${PORT}/api`);
+            console.log(`🔗 API Base URL: http://192.168.0.115:${PORT}/api`);
         });
     })
     .catch(err => {

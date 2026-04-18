@@ -15,7 +15,7 @@ import axios from "axios";
 import { API_URL } from "../../constants/api";
 
 export default function HomeScreen() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const { colorScheme } = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
   const router = useRouter();
@@ -96,8 +96,20 @@ export default function HomeScreen() {
           }
       }
 
-      const savedTitle = await getSetting("app_title");
-      if (savedTitle) setAppTitle(savedTitle);
+      let titleToSet = "💰ExpenseIQ";
+      if (token) {
+        try {
+          const appNameRes = await axios.get(`${API_URL}/appnames`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (appNameRes.data?.data?.name) {
+            titleToSet = appNameRes.data.data.name;
+          }
+        } catch (e) {
+          console.error("Failed to load title from api", e);
+        }
+      }
+      setAppTitle(titleToSet);
 
       const count = await getUnreadCount();
       setUnreadCount(count);

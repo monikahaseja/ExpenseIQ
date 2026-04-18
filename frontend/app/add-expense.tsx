@@ -37,6 +37,7 @@ export default function AddExpenseScreen() {
   const [amount, setAmount] = useState("");
   const [type, setType] = useState<"income" | "expense">("expense");
   const [category, setCategory] = useState("others");
+  const [customCategory, setCustomCategory] = useState("");
   const [paymentMode, setPaymentMode] = useState("cash");
   const [tags, setTags] = useState("");
   const [isRecurring, setIsRecurring] = useState(false);
@@ -48,8 +49,22 @@ export default function AddExpenseScreen() {
     if (params.id) {
       setTitle(params.title as string);
       setAmount(params.amount as string);
-      setType((params.type as "income" | "expense") || "expense");
-      setCategory((params.category as string) || "others");
+      const typeStr = (params.type as "income" | "expense") || "expense";
+      const initialCat = params.category as string;
+      setType(typeStr);
+      
+      const matchedCat = (typeStr === "expense" ? CATEGORIES : INCOME_CATEGORIES).find(c => c.id === initialCat);
+      
+      if (!matchedCat && initialCat && initialCat.startsWith("Others - ")) {
+        setCategory("others");
+        setCustomCategory(initialCat.replace("Others - ", ""));
+      } else if (!matchedCat && initialCat && initialCat !== "others") {
+        setCategory("others");
+        setCustomCategory(initialCat);
+      } else {
+        setCategory(initialCat || "others");
+      }
+      
       setPaymentMode((params.payment_mode as string) || "cash");
       setTags((params.tags as string) || "");
       setIsRecurring(params.is_recurring === "1");
@@ -122,11 +137,15 @@ export default function AddExpenseScreen() {
 
     setLoading(true);
     try {
+      const finalCategory = (category === "others" && customCategory.trim()) 
+        ? `Others - ${customCategory.trim()}` 
+        : category;
+
       const expenseData = {
         title,
         amount: parseFloat(amount),
         type,
-        category,
+        category: finalCategory,
         payment_mode: paymentMode,
         tags,
         is_recurring: isRecurring,
@@ -146,12 +165,12 @@ export default function AddExpenseScreen() {
         if (expenseId && !isNaN(Number(expenseId))) {
           await db.runAsync(
             "UPDATE expenses SET title=?, amount=?, type=?, category=?, payment_mode=?, tags=?, is_recurring=?, updated_at=? WHERE id=?;",
-            [title, parseFloat(amount), type, category, paymentMode, tags, isRecurring ? 1 : 0, now(), Number(expenseId)],
+            [title, parseFloat(amount), type, finalCategory, paymentMode, tags, isRecurring ? 1 : 0, now(), Number(expenseId)],
           );
         } else if (!expenseId) {
           await db.runAsync(
             "INSERT INTO expenses (title, amount, type, category, payment_mode, tags, is_recurring, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);",
-            [title, parseFloat(amount), type, category, paymentMode, tags, isRecurring ? 1 : 0, now(), now()],
+            [title, parseFloat(amount), type, finalCategory, paymentMode, tags, isRecurring ? 1 : 0, now(), now()],
           );
         }
       } catch (dbError) {
@@ -329,6 +348,20 @@ export default function AddExpenseScreen() {
               </TouchableOpacity>
             ))}
           </ScrollView>
+
+          {category === "others" && (
+            <View
+              className="flex-row items-center bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-3 mb-2 mt-4 border border-gray-100 dark:border-gray-700"
+            >
+              <TextInput
+                value={customCategory}
+                onChangeText={setCustomCategory}
+                placeholder="Enter custom category name (e.g. Travel)"
+                placeholderTextColor={theme.gray}
+                className="flex-1 ml-1 text-sm text-black dark:text-white"
+              />
+            </View>
+          )}
 
           <Text className="text-gray-400 font-bold text-xs mt-6 mb-3 uppercase tracking-widest ml-1">
             Payment Mode

@@ -29,11 +29,12 @@ export default function ExpenseItem({ item, onEdit, onDelete, onPress }: Props) 
   const { colorScheme } = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
   const isIncome = item.type === 'income';
-  const category = isIncome 
+  const knownCategory = isIncome 
     ? INCOME_CATEGORIES.find(c => c.id === item.category) 
     : CATEGORIES.find(c => c.id === item.category);
-  const categoryIcon = category?.icon || (isIncome ? "trending-up" : "trending-down");
-  const categoryColor = category?.color || (isIncome ? theme.success : theme.error);
+  const categoryIcon = knownCategory?.icon || (isIncome ? "trending-up" : "grid");
+  const categoryColor = knownCategory?.color || (isIncome ? theme.success : "#94a3b8");
+  const categoryName = knownCategory?.name || item.category || "Others";
 
   return (
     <TouchableOpacity 
@@ -52,13 +53,17 @@ export default function ExpenseItem({ item, onEdit, onDelete, onPress }: Props) 
           <Text className="text-lg font-bold text-black dark:text-white" numberOfLines={1}>
             {item.title}
           </Text>
-          <View className="flex-row items-center">
-            {category && (
-              <Text className="text-gray-400 text-xs mr-2" style={{ color: categoryColor }}>
-                {category.name}
+          <View className="flex-row items-center overflow-hidden">
+            {categoryName && (
+              <Text 
+                className="text-gray-400 text-xs mr-2 flex-shrink" 
+                style={{ color: categoryColor }}
+                numberOfLines={1}
+              >
+                {categoryName}
               </Text>
             )}
-            <Text className="text-gray-500 dark:text-gray-400 text-xs">
+            <Text className="text-gray-500 dark:text-gray-400 text-xs flex-shrink-0">
               {new Date(item.created_at).toLocaleDateString()}
             </Text>
           </View>
@@ -74,8 +79,11 @@ export default function ExpenseItem({ item, onEdit, onDelete, onPress }: Props) 
         </View>
       </View>
 
-      <View className="flex-row items-center">
-        <Text className={`text-lg font-bold mr-4 ${isIncome ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+      <View className="flex-row items-center ml-2">
+        <Text 
+           className={`text-lg font-bold mr-3 flex-shrink-0 ${isIncome ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
+           numberOfLines={1}
+        >
           {isIncome ? '+ ' : '- '}₹ {item.amount.toFixed(2)}
         </Text>
         
