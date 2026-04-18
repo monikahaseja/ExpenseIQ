@@ -13,6 +13,7 @@ const transactionSchema = new mongoose.Schema({
     payment_mode: { type: String },
     tags: { type: String },
     is_recurring: { type: Boolean, default: false },
+    useLimit: { type: Boolean, default: true },
     created_at: { type: Date, default: Date.now },
     updated_at: { type: Date, default: Date.now }
 });

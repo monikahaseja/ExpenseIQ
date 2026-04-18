@@ -41,6 +41,7 @@ export default function AddExpenseScreen() {
   const [paymentMode, setPaymentMode] = useState("cash");
   const [tags, setTags] = useState("");
   const [isRecurring, setIsRecurring] = useState(false);
+  const [useLimit, setUseLimit] = useState(true);
   const [titleError, setTitleError] = useState("");
   const [amountError, setAmountError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -68,6 +69,7 @@ export default function AddExpenseScreen() {
       setPaymentMode((params.payment_mode as string) || "cash");
       setTags((params.tags as string) || "");
       setIsRecurring(params.is_recurring === "1");
+      setUseLimit(params.use_limit !== "0"); // default true if undefined
     }
   }, [params.id]);
 
@@ -81,14 +83,14 @@ export default function AddExpenseScreen() {
       const budgetLimit = await getBudget(monthKey);
       if (budgetLimit <= 0) return;
 
-      const rows = await db.getAllAsync<{ amount: number; type: string }>(
-        "SELECT amount, type FROM transactions WHERE created_at LIKE ?;",
+      const rows = await db.getAllAsync<{ amount: number; type: string; use_limit: number }>(
+        "SELECT amount, type, use_limit FROM transactions WHERE created_at LIKE ?;",
         [`${monthKey}%`],
       );
 
       let totalSpent = 0;
       rows.forEach((item) => {
-        if (item.type === "expense") totalSpent += item.amount;
+        if (item.type === "expense" && item.use_limit !== 0) totalSpent += item.amount;
       });
 
       const percent = (totalSpent / budgetLimit) * 100;
@@ -149,6 +151,7 @@ export default function AddExpenseScreen() {
         payment_mode: paymentMode,
         tags,
         is_recurring: isRecurring,
+        useLimit: useLimit,
       };
 
       // 1. Save to Backend (Primary)
@@ -164,13 +167,13 @@ export default function AddExpenseScreen() {
       try {
         if (expenseId && !isNaN(Number(expenseId))) {
           await db.runAsync(
-            "UPDATE transactions SET title=?, amount=?, type=?, category=?, payment_mode=?, tags=?, is_recurring=?, updated_at=? WHERE id=?;",
-            [title, parseFloat(amount), type, finalCategory, paymentMode, tags, isRecurring ? 1 : 0, now(), Number(expenseId)],
+            "UPDATE transactions SET title=?, amount=?, type=?, category=?, payment_mode=?, tags=?, is_recurring=?, use_limit=?, updated_at=? WHERE id=?;",
+            [title, parseFloat(amount), type, finalCategory, paymentMode, tags, isRecurring ? 1 : 0, useLimit ? 1 : 0, now(), Number(expenseId)],
           );
         } else if (!expenseId) {
           await db.runAsync(
-            "INSERT INTO transactions (title, amount, type, category, payment_mode, tags, is_recurring, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);",
-            [title, parseFloat(amount), type, finalCategory, paymentMode, tags, isRecurring ? 1 : 0, now(), now()],
+            "INSERT INTO transactions (title, amount, type, category, payment_mode, tags, is_recurring, use_limit, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+            [title, parseFloat(amount), type, finalCategory, paymentMode, tags, isRecurring ? 1 : 0, useLimit ? 1 : 0, now(), now()],
           );
         }
       } catch (dbError) {
@@ -409,6 +412,27 @@ export default function AddExpenseScreen() {
               />
             </TouchableOpacity>
           </View>
+
+          {type === "expense" && (
+            <View className="flex-row items-center justify-between mt-6 px-1">
+              <View>
+                <Text className="text-black dark:text-white font-bold text-lg">
+                  Use Limit
+                </Text>
+                <Text className="text-gray-500 text-xs">
+                  Deduct this expense from your monthly budget
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setUseLimit(!useLimit)}
+                className={`w-14 h-8 rounded-full p-1 ${useLimit ? "bg-cyan-800" : "bg-gray-300 dark:bg-gray-700"}`}
+              >
+                <View
+                  className={`w-6 h-6 rounded-full bg-white shadow-sm ${useLimit ? "translate-x-6" : ""}`}
+                />
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         <View className="gap-y-4">

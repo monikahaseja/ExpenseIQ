@@ -66,7 +66,7 @@ export default function SettingsScreen() {
       let totalIncome = 0;
       expenses.forEach((item: any) => {
         if (item.type === 'income') totalIncome += item.amount;
-        else totalSpent += item.amount;
+        else if (item.useLimit !== false) totalSpent += item.amount;
       });
       
       setSpent(totalSpent);

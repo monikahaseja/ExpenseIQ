@@ -13,6 +13,7 @@ export const initDB = async () => {
       payment_mode TEXT,
       tags TEXT,
       is_recurring INTEGER DEFAULT 0,
+      use_limit INTEGER DEFAULT 1,
       created_at TEXT,
       updated_at TEXT
     );
@@ -53,6 +54,10 @@ export const initDB = async () => {
 
   try {
     await db.execAsync("ALTER TABLE transactions ADD COLUMN is_recurring INTEGER DEFAULT 0;");
+  } catch (e) {}
+  
+  try {
+    await db.execAsync("ALTER TABLE transactions ADD COLUMN use_limit INTEGER DEFAULT 1;");
   } catch (e) {}
 
   await db.execAsync(`

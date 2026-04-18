@@ -14,6 +14,8 @@ export interface Expense {
   payment_mode?: string;
   tags?: string;
   is_recurring?: number;
+  useLimit?: boolean;
+  use_limit?: number; // Local DB column
   created_at: string;
   updated_at: string;
 }

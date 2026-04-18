@@ -27,6 +27,7 @@ export default function ExpenseDetailsScreen() {
     const tags = params.tags as string;
     const createdAt = params.created_at as string;
     const isRecurring = params.is_recurring === "1" || params.is_recurring === "true";
+    const useLimit = params.use_limit !== "0" && params.use_limit !== "false";
 
     const isIncome = type === "income";
     const category = isIncome 
@@ -98,6 +99,15 @@ export default function ExpenseDetailsScreen() {
                     <DetailItem label="Payment" value={paymentMode.charAt(0).toUpperCase() + paymentMode.slice(1)} icon="card" theme={theme} />
                     {isRecurring && (
                         <DetailItem label="Recurring" value="Yes (Monthly)" icon="repeat" theme={theme} color={theme.primary} />
+                    )}
+                    {!isIncome && (
+                        <DetailItem 
+                            label="Budget Limit" 
+                            value={useLimit ? "Deducted" : "Excluded"} 
+                            icon={useLimit ? "checkmark-circle" : "close-circle"} 
+                            theme={theme} 
+                            color={useLimit ? theme.success : theme.gray} 
+                        />
                     )}
                 </View>
 

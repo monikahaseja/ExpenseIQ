@@ -428,6 +428,7 @@ export default function HomeScreen() {
                     category: expense.category,
                     payment_mode: expense.payment_mode,
                     is_recurring: expense.is_recurring?.toString(),
+                    use_limit: (expense.use_limit !== undefined ? expense.use_limit : (expense.useLimit ? 1 : 0)).toString(),
                     created_at: expense.created_at,
                     tags: expense.tags
                   },
@@ -444,6 +445,7 @@ export default function HomeScreen() {
                     category: expense.category,
                     payment_mode: expense.payment_mode,
                     is_recurring: expense.is_recurring?.toString(),
+                    use_limit: (expense.use_limit !== undefined ? expense.use_limit : (expense.useLimit ? 1 : 0)).toString(),
                     created_at: expense.created_at,
                     tags: expense.tags
                   },
