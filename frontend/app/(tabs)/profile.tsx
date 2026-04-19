@@ -7,7 +7,7 @@ import { Colors } from "../../constants/colors";
 import { useColorScheme } from "nativewind";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
-import axios from 'axios';
+import api from '../../utils/api';
 import { API_URL } from '../../constants/api';
 
 export default function ProfileScreen() {
@@ -47,7 +47,7 @@ export default function ProfileScreen() {
 
     setLoading(true);
     try {
-      const response = await axios.put(`${API_URL}/auth/profile`, { name, email, phoneNumber, profilePhoto });
+      const response = await api.put(`/auth/profile`, { name, email, phoneNumber, profilePhoto });
       await updateProfile(response.data.data);
       setIsEditing(false);
       Alert.alert('Success', 'Profile updated successfully');
@@ -85,7 +85,7 @@ export default function ProfileScreen() {
 
     setLoading(true);
     try {
-      await axios.put(`${API_URL}/auth/change-password`, { currentPassword, newPassword });
+      await api.put(`/auth/change-password`, { currentPassword, newPassword });
       setPasswordModalVisible(false);
       setCurrentPassword('');
       setNewPassword('');

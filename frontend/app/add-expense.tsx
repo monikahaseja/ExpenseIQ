@@ -20,7 +20,7 @@ import { useNotification } from "../components/NotificationContext";
 import { now } from "../utils/date";
 import { CATEGORIES, INCOME_CATEGORIES, PAYMENT_MODES } from "../constants/categories";
 import { useAuth } from "../context/AuthContext";
-import axios from "axios";
+import api from "../utils/api";
 import { API_URL } from "../constants/api";
 
 export default function AddExpenseScreen() {
@@ -157,9 +157,9 @@ export default function AddExpenseScreen() {
       // 1. Save to Backend (Primary)
       if (user) {
         if (expenseId) {
-          await axios.put(`${API_URL}/transactions/${expenseId}`, expenseData);
+          await api.put(`/transactions/${expenseId}`, expenseData);
         } else {
-          await axios.post(`${API_URL}/transactions`, expenseData);
+          await api.post(`/transactions`, expenseData);
         }
       }
 

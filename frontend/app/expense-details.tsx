@@ -7,7 +7,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { Colors } from "../constants/colors";
 import { CATEGORIES, INCOME_CATEGORIES } from "../constants/categories";
 import { useAuth } from "../context/AuthContext";
-import axios from "axios";
+import api from "../utils/api";
 import { API_URL } from "../constants/api";
 import { db } from "../db/database";
 
@@ -47,7 +47,7 @@ export default function ExpenseDetailsScreen() {
                 onPress: async () => {
                     try {
                         if (user) {
-                            await axios.delete(`${API_URL}/transactions/${id}`);
+                            await api.delete(`/transactions/${id}`);
                         }
                         await db.runAsync("DELETE FROM transactions WHERE id=?;", [id]);
                         router.back();

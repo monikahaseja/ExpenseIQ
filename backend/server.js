@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const cookieParser = require('cookie-parser');
+const os = require('os');
 
 dotenv.config();
 
@@ -38,6 +39,21 @@ app.get('/health', (req, res) => res.send('API is running...'));
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/expenseiq';
 
+// Helper to get local IP address
+const getNetworkIp = () => {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+        for (const iface of interfaces[name]) {
+            if (iface.family === 'IPv4' && !iface.internal) {
+                return iface.address;
+            }
+        }
+    }
+    return 'localhost';
+};
+
+const IP_ADDRESS = process.env.API_IP || getNetworkIp();
+
 console.log('Connecting to MongoDB...');
 
 mongoose.connect(MONGO_URI)
@@ -46,7 +62,7 @@ mongoose.connect(MONGO_URI)
         app.listen(PORT, '0.0.0.0', () => {
             console.log(`🚀 Server is up and running on all interfaces!`);
             console.log(`📡 Local: http://localhost:${PORT}`);
-            console.log(`🔗 API Base URL: http://192.168.0.115:${PORT}/api`);
+            console.log(`🔗 API Base URL: http://${IP_ADDRESS}:${PORT}/api`);
         });
     })
     .catch(err => {

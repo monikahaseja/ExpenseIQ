@@ -8,6 +8,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import axios from "axios";
 import { API_URL } from "../../constants/api";
 import { useAuth } from "../../context/AuthContext";
+import api from "../../utils/api";
 import { useNotification } from "../../components/NotificationContext";
 
 interface Goal {
@@ -32,7 +33,7 @@ export default function GoalsScreen() {
   const { colorScheme } = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
   const isDark = colorScheme === "dark";
-  const { token } = useAuth();
+  const { token, isLoading: authLoading } = useAuth();
   const { showNotification } = useNotification();
 
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -51,14 +52,15 @@ export default function GoalsScreen() {
   const [adjustmentAmount, setAdjustmentAmount] = useState("");
 
   const fetchGoals = async () => {
-    if (!token) return;
+    if (authLoading || !token) return;
+    setLoading(true);
     try {
-      const response = await axios.get(`${API_URL}/goals`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setGoals(response.data.data);
-    } catch (e) {
-      console.error("Error fetching goals:", e);
+      const response = await api.get("/goals");
+      setGoals(response.data.data.map((g: any) => ({ ...g, id: g.id || g._id })));
+    } catch (error) {
+      console.warn("Error fetching goals");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -76,16 +78,16 @@ export default function GoalsScreen() {
 
     setLoading(true);
     try {
-      await axios.post(`${API_URL}/goals`, {
-        title,
-        target_amount: parseFloat(targetAmount),
-        current_amount: parseFloat(currentAmount || "0"),
-        icon: selectedIcon,
-        color: selectedColor,
-        deadline: new Date().toISOString()
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      if (token) {
+        await api.post("/goals", {
+          title,
+          target_amount: parseFloat(targetAmount),
+          current_amount: parseFloat(currentAmount || "0"),
+          icon: selectedIcon,
+          color: selectedColor,
+          deadline: new Date().toISOString()
+        });
+      }
       
       setModalVisible(false);
       setTitle("");
@@ -102,11 +104,12 @@ export default function GoalsScreen() {
 
   const updateGoalProgress = async (goal: Goal, amount: number) => {
     try {
-      await axios.put(`${API_URL}/goals/${goal.id}/progress`, {
-        amount
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const newAmount = goal.current_amount + amount;
+      if (token) {
+        await api.put(`/goals/${goal.id}`, {
+          current_amount: newAmount
+        });
+      }
       fetchGoals();
     } catch (e) {
       console.error("Error updating progress:", e);
@@ -160,9 +163,9 @@ export default function GoalsScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              await axios.delete(`${API_URL}/goals/${id}`, {
-                headers: { Authorization: `Bearer ${token}` }
-              });
+              if (token) {
+                await api.delete(`/goals/${id}`);
+              }
               fetchGoals();
             } catch (e) {
               console.error("Error deleting goal:", e);

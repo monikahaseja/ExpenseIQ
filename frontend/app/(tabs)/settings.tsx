@@ -10,9 +10,8 @@ import { useNotification } from "../../components/NotificationContext";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../context/AuthContext";
 import * as ImagePicker from 'expo-image-picker';
-import axios from "axios";
+import api from "../../utils/api";
 import { API_URL } from "../../constants/api";
-
 if (Platform.OS === 'android') {
   if (UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -21,7 +20,7 @@ if (Platform.OS === 'android') {
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { user, token, updateProfile } = useAuth();
+  const { user, token, updateProfile, isLoading: authLoading } = useAuth();
   const { showNotification } = useNotification();
   const [isUploading, setIsUploading] = useState(false);
   const { colorScheme, toggleColorScheme } = useColorScheme();
@@ -44,22 +43,18 @@ export default function SettingsScreen() {
   };
 
   const loadMonthData = async () => {
-    if (!token) return;
+    if (authLoading || !token) return;
     try {
       const monthKey = getCurrentMonthKey();
       
       // Fetch budget
-      const budgetRes = await axios.get(`${API_URL}/budgets?month=${monthKey}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const budgetRes = await api.get(`/budgets?month=${monthKey}`);
       const limit = budgetRes.data.data.length > 0 ? budgetRes.data.data[0].amount : 0;
       setBudgetLimit(limit > 0 ? limit.toString() : "");
       setLastSavedBudget(limit > 0 ? limit.toString() : "");
 
       // Fetch expenses
-      const expensesRes = await axios.get(`${API_URL}/analytics?month=${monthKey}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const expensesRes = await api.get(`/analytics?month=${monthKey}`);
       const expenses = expensesRes.data.data.expenses;
       
       let totalSpent = 0;
@@ -73,9 +68,7 @@ export default function SettingsScreen() {
       setIncome(totalIncome);
 
       // Fetch app name
-      const appNameRes = await axios.get(`${API_URL}/appnames`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const appNameRes = await api.get(`/appnames`);
       if (appNameRes.data?.data?.name) {
         setAppTitle(appNameRes.data.data.name);
       }
@@ -102,9 +95,7 @@ export default function SettingsScreen() {
     try {
       const limit = parseFloat(budgetLimit) || 0;
       const monthKey = getCurrentMonthKey();
-      await axios.post(`${API_URL}/budgets`, { month: monthKey, amount: limit }, {
-         headers: { Authorization: `Bearer ${token}` }
-      });
+      await api.post(`/budgets`, { month: monthKey, amount: limit });
       setLastSavedBudget(budgetLimit);
       showNotification(`Monthly budget set to ₹${limit}`, "success");
     } catch (e) {
@@ -145,7 +136,7 @@ export default function SettingsScreen() {
       // For this demo, we'll just save the local URI or a base64 string to the DB
       // simulating "image url from api side" as requested.
       
-      const response = await axios.put(`${API_URL}/auth/profile`, {
+      const response = await api.put(`/auth/profile`, {
         profilePhoto: imageUri
       });
 
@@ -227,9 +218,7 @@ export default function SettingsScreen() {
               <TouchableOpacity
                 onPress={async () => {
                   try {
-                    await axios.post(`${API_URL}/appnames`, { name: appTitle }, {
-                      headers: { Authorization: `Bearer ${token}` }
-                    });
+                    await api.post(`/appnames`, { name: appTitle });
                     setIsSaved(true);
                     showNotification("App name updated!", "success");
                     setTimeout(() => setIsSaved(false), 2000);

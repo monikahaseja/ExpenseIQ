@@ -11,11 +11,11 @@ import { useNotification } from "../../components/NotificationContext";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { CATEGORIES, INCOME_CATEGORIES } from "../../constants/categories";
 import { useAuth } from "../../context/AuthContext";
-import axios from "axios";
+import api from "../../utils/api";
 import { API_URL } from "../../constants/api";
 
 export default function HomeScreen() {
-  const { user, token } = useAuth();
+  const { user, token, isLoading: authLoading } = useAuth();
   const { colorScheme } = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
   const router = useRouter();
@@ -30,6 +30,7 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(false);
 
   const fetchExpenses = async () => {
+    if (authLoading) return;
     try {
       const year = currentDate.getFullYear();
       const month = (currentDate.getMonth() + 1).toString().padStart(2, "0");
@@ -39,12 +40,12 @@ export default function HomeScreen() {
       if (user) {
         setLoading(true);
         try {
-          const response = await axios.get(`${API_URL}/transactions`, { params: { month } });
+          const response = await api.get(`/transactions`, { params: { month } });
           rows = response.data.data
             .filter((e: any) => e.created_at && e.created_at.startsWith(monthStr))
             .map((e: any) => ({ ...e, id: e.id || e._id }));
         } catch (e) {
-          console.error("API fetch failed, falling back to local storage", e);
+          console.warn("API fetch failed, falling back to local storage");
           rows = await db.getAllAsync<Expense>(
             "SELECT * FROM transactions WHERE strftime('%Y-%m', created_at) = ? OR created_at LIKE ? ORDER BY id DESC;",
             [monthStr, `${monthStr}%`],
@@ -99,14 +100,12 @@ export default function HomeScreen() {
       let titleToSet = "💰ExpenseIQ";
       if (token) {
         try {
-          const appNameRes = await axios.get(`${API_URL}/appnames`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
+          const appNameRes = await api.get(`/appnames`);
           if (appNameRes.data?.data?.name) {
             titleToSet = appNameRes.data.data.name;
           }
         } catch (e) {
-          console.error("Failed to load title from api", e);
+          console.warn("Failed to load title from api");
         }
       }
       setAppTitle(titleToSet);
@@ -164,9 +163,9 @@ export default function HomeScreen() {
         onPress: async () => {
           if (user) {
             try {
-              await axios.delete(`${API_URL}/transactions/${id}`);
+              await api.delete(`/transactions/${id}`);
             } catch (e) {
-              console.error("Backend delete failed", e);
+              console.warn("Backend delete failed");
             }
           }
           await db.runAsync("DELETE FROM transactions WHERE id=?;", [id]);

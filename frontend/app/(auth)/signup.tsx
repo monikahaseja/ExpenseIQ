@@ -5,7 +5,7 @@ import { useRouter, Link } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 import { Colors } from '../../constants/colors';
 import { useColorScheme } from 'nativewind';
-import axios from 'axios';
+import api from '../../utils/api';
 import { API_URL } from '../../constants/api';
 
 export default function SignupScreen() {
@@ -27,7 +27,7 @@ export default function SignupScreen() {
 
     setLoading(true);
     try {
-      const response = await axios.post(`${API_URL}/auth/signup`, { name, email, password, phoneNumber });
+      const response = await api.post(`/auth/signup`, { name, email, password, phoneNumber });
       const { token, user } = response.data.data;
       await login(token, user);
       router.replace('/');

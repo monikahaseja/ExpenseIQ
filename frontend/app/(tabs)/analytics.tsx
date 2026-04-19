@@ -11,9 +11,9 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import * as Print from 'expo-print';
-import axios from "axios";
 import { API_URL } from "../../constants/api";
 import { useAuth } from "../../context/AuthContext";
+import api from "../../utils/api";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -21,7 +21,7 @@ export default function AnalyticsScreen() {
   const { colorScheme } = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
   const isDark = colorScheme === "dark";
-  const { token } = useAuth();
+  const { token, isLoading: authLoading } = useAuth();
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -31,7 +31,7 @@ export default function AnalyticsScreen() {
   const [showDropdown, setShowDropdown] = useState(false);
 
   const fetchMonthData = async () => {
-    if (!token) return;
+    if (authLoading || !token) return;
     try {
       const year = currentDate.getFullYear();
       let url = `${API_URL}/analytics`;
@@ -45,9 +45,10 @@ export default function AnalyticsScreen() {
           url += `?all=true`;
       }
 
-      const response = await axios.get(url, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      // Convert full URL back to relative if it starts with the base
+      const finalPath = url.replace(API_URL, '');
+
+      const response = await api.get(finalPath);
       setExpenses(response.data.data.expenses);
     } catch (e) {
       console.error("Error fetching analytic data:", e);

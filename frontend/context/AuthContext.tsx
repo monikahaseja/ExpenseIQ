@@ -39,9 +39,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (storedToken && storedUser) {
         setToken(storedToken);
         setUser(JSON.parse(storedUser));
-        if (axios.defaults.headers) {
-          axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
-        }
       }
     } catch (e) {
       console.error('Failed to load auth data', e);
@@ -55,7 +52,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await SecureStore.setItemAsync('userData', JSON.stringify(newUser));
     setToken(newToken);
     setUser(newUser);
-    axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
   };
 
   const logout = async () => {
@@ -63,7 +59,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await SecureStore.deleteItemAsync('userData');
     setToken(null);
     setUser(null);
-    delete axios.defaults.headers.common['Authorization'];
   };
 
   const updateProfile = async (updatedUser: User) => {
