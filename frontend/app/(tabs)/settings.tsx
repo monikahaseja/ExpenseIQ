@@ -1,17 +1,18 @@
-import { View, Text, TextInput, ScrollView, Alert, TouchableOpacity, Platform, LayoutAnimation, UIManager, Switch, Modal, Linking, Image } from "react-native";
+import { View, Text, TextInput, ScrollView, Alert, TouchableOpacity, Platform, LayoutAnimation, UIManager, Switch, Modal, Linking, Image, StyleSheet, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useState, useCallback } from "react";
 import { useColorScheme } from "nativewind";
 import { useFocusEffect } from "@react-navigation/native";
-import { db } from "../../db/database";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Colors } from "../../constants/colors";
 import { useNotification } from "../../components/NotificationContext";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../context/AuthContext";
 import * as ImagePicker from 'expo-image-picker';
+import { ThemeSwitcher } from "../../components/ThemeSwitcher";
+import { useTheme } from "../../context/ThemeContext";
 import api from "../../utils/api";
-import { API_URL } from "../../constants/api";
+
 if (Platform.OS === 'android') {
   if (UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -22,9 +23,14 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { user, token, updateProfile, isLoading: authLoading } = useAuth();
   const { showNotification } = useNotification();
+  const { theme, themeName } = useTheme();
+  const { logout } = useAuth();
   const [isUploading, setIsUploading] = useState(false);
-  const { colorScheme, toggleColorScheme } = useColorScheme();
-  const theme = Colors[colorScheme ?? 'light'];
+  const [passwordModalVisible, setPasswordModalVisible] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [pwLoading, setPwLoading] = useState(false);
   const [spent, setSpent] = useState(0);
   const [budgetLimit, setBudgetLimit] = useState("");
   const [lastSavedBudget, setLastSavedBudget] = useState("");
@@ -35,6 +41,8 @@ export default function SettingsScreen() {
   const [appTitle, setAppTitle] = useState("💰ExpenseIQ");
   const [titleError, setTitleError] = useState("");
   const [isSaved, setIsSaved] = useState(false);
+  const [previewModalVisible, setPreviewModalVisible] = useState(false);
+
 
   const getCurrentMonthKey = () => {
     const year = currentDate.getFullYear();
@@ -46,14 +54,11 @@ export default function SettingsScreen() {
     if (authLoading || !token) return;
     try {
       const monthKey = getCurrentMonthKey();
-      
-      // Fetch budget
       const budgetRes = await api.get(`/budgets?month=${monthKey}`);
       const limit = budgetRes.data.data.length > 0 ? budgetRes.data.data[0].amount : 0;
       setBudgetLimit(limit > 0 ? limit.toString() : "");
       setLastSavedBudget(limit > 0 ? limit.toString() : "");
 
-      // Fetch expenses
       const expensesRes = await api.get(`/analytics?month=${monthKey}`);
       const expenses = expensesRes.data.data.expenses;
       
@@ -67,7 +72,6 @@ export default function SettingsScreen() {
       setSpent(totalSpent);
       setIncome(totalIncome);
 
-      // Fetch app name
       const appNameRes = await api.get(`/appnames`);
       if (appNameRes.data?.data?.name) {
         setAppTitle(appNameRes.data.data.name);
@@ -77,11 +81,10 @@ export default function SettingsScreen() {
     }
   };
 
-
   useFocusEffect(
     useCallback(() => {
       loadMonthData();
-    }, [currentDate])
+    }, [currentDate, token])
   );
 
   const changeMonth = (direction: number) => {
@@ -97,53 +100,40 @@ export default function SettingsScreen() {
       const monthKey = getCurrentMonthKey();
       await api.post(`/budgets`, { month: monthKey, amount: limit });
       setLastSavedBudget(budgetLimit);
-      showNotification(`Monthly budget set to ₹${limit}`, "success");
+      showNotification("Budget limit updated!", "success");
     } catch (e) {
-      console.error("Error saving budget:", e);
-      showNotification("Failed to save budget", "error");
+      console.error("Save budget error", e);
+      showNotification("Failed to update budget", "error");
     }
   };
 
-  const limitNum = parseFloat(budgetLimit) || 0;
-  const progressPercent = limitNum > 0 ? (spent / limitNum) * 100 : 0;
-  const progress = Math.min(progressPercent, 100);
-  
-  let progressColor = "bg-green-500";
-  if (progress > 75) progressColor = "bg-yellow-500";
-  if (progress >= 100) progressColor = "bg-red-500";
-
-  const formattedMonth = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
-
   const pickImage = async () => {
-    // No permissions request is necessary for launching the image library
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.5,
     });
 
     if (!result.canceled) {
-      const selectedImage = result.assets[0].uri;
-      uploadProfilePhoto(selectedImage);
+      uploadImage(result.assets[0].uri);
     }
   };
 
-  const uploadProfilePhoto = async (imageUri: string) => {
+  const uploadImage = async (uri: string) => {
     setIsUploading(true);
     try {
-      // In a real app, you would upload to S3/Cloudinary and get a URL.
-      // For this demo, we'll just save the local URI or a base64 string to the DB
-      // simulating "image url from api side" as requested.
-      
-      const response = await api.put(`/auth/profile`, {
-        profilePhoto: imageUri
-      });
+      const formData = new FormData();
+      const filename = uri.split('/').pop();
+      const match = /\.(\w+)$/.exec(filename || '');
+      const type = match ? `image/${match[1]}` : `image`;
 
-      if (response.data && response.data.data) {
-        await updateProfile(response.data.data);
-        showNotification("Profile photo updated!", "success");
-      }
+      formData.append('profilePhoto', { uri, name: filename, type } as any);
+      const res = await api.put('/users/profile-photo', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      updateProfile({ ...user!, profilePhoto: res.data.profilePhoto });
+      showNotification("Profile photo updated!", "success");
     } catch (error) {
       console.error("Upload failed", error);
       showNotification("Failed to update profile photo", "error");
@@ -152,54 +142,68 @@ export default function SettingsScreen() {
     }
   };
 
+  const formattedMonth = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+  const progress = budgetLimit ? (spent / parseFloat(budgetLimit)) * 100 : 0;
+
   return (
-    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: theme.background }}>
-    <ScrollView className="flex-1 bg-white dark:bg-black p-4">
-        <View className="flex-row justify-between items-center mb-6 mt-4">
-          <Text className="text-3xl font-extrabold text-black dark:text-white">Settings</Text>
+    <SafeAreaView edges={['top']} style={[styles.safeArea, { backgroundColor: theme.background }]}>
+      <ScrollView 
+        style={styles.flex1} 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.header}>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>Settings</Text>
         </View>
 
-        {/* Profile Link Section */}
+        {/* Profile Section */}
         <TouchableOpacity 
           onPress={() => router.push("/profile" as any)}
-          className="bg-white dark:bg-gray-900 p-4 rounded-3xl shadow-sm mb-6 border border-gray-100 dark:border-gray-800 flex-row items-center"
+          style={[styles.profileCard, { backgroundColor: theme.card, borderColor: theme.border }]}
         >
+          <View style={styles.profileRow}>
             <TouchableOpacity 
-              onPress={pickImage}
+              onPress={() => setPreviewModalVisible(true)}
               disabled={isUploading}
-            className="w-12 h-12 rounded-full bg-cyan-800 items-center justify-center mr-4 overflow-hidden border-2 border-cyan-700"
+              style={[styles.avatarContainer, { backgroundColor: theme.primary, borderColor: theme.accent }]}
             >
               {user?.profilePhoto ? (
-                <Image source={{ uri: user.profilePhoto }} className="w-full h-full" />
+                <Image source={{ uri: user.profilePhoto }} style={styles.avatar} />
               ) : (
-                <Text className="text-white font-bold text-xl">{user?.name?.[0]?.toUpperCase() || 'U'}</Text>
+                <Text style={styles.avatarInitial}>{user?.name?.[0]?.toUpperCase() || 'U'}</Text>
               )}
               {isUploading && (
-                <View className="absolute inset-0 bg-black/40 items-center justify-center">
-                  <Ionicons name="cloud-upload" size={16} color="white" />
+                <View style={styles.uploadOverlay}>
+                  <ActivityIndicator color="white" size="small" />
                 </View>
               )}
             </TouchableOpacity>
-          <View className="flex-1">
-            <Text className="text-lg font-bold text-black dark:text-white">{user?.name || 'User Profile'}</Text>
-            <Text className="text-xs text-gray-500 font-bold uppercase tracking-widest">View & Edit Profile</Text>
+            <View style={styles.flex1}>
+              <Text style={[styles.profileName, { color: theme.text }]}>{user?.name || 'User Profile'}</Text>
+              <Text style={[styles.profileSubtitle, { color: theme.gray }]}>VIEW & EDIT PROFILE</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={24} color={theme.tabIconDefault} />
           </View>
-          <Ionicons name="chevron-forward" size={24} color={theme.tabIconDefault} />
         </TouchableOpacity>
 
-        {/* Editable App Title */}
-        <View className="bg-white dark:bg-gray-900 p-6 rounded-3xl shadow-sm mb-6 border border-gray-100 dark:border-gray-800">
-          <View className="flex-row justify-between items-center mb-4">
-            <Text className="text-lg font-bold text-black dark:text-white">App Customization</Text>
+        {/* Premium Theme Switcher */}
+        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, paddingBottom: 8, paddingTop: 8 }]}>
+          <ThemeSwitcher />
+        </View>
+
+        {/* App Title Section */}
+        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <View style={styles.cardHeader}>
+            <Text style={[styles.cardTitle, { color: theme.text }]}>App Customization</Text>
             {isSaved && !titleError && (
-              <View className="flex-row items-center bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded-lg">
+              <View style={[styles.savedBadge, { backgroundColor: theme.success + '20' }]}>
                 <Ionicons name="checkmark-circle" size={14} color={theme.success} />
-                <Text className="text-green-600 dark:text-green-400 text-[10px] font-bold ml-1">Saved</Text>
+                <Text style={[styles.savedText, { color: theme.success }]}>Saved</Text>
               </View>
             )}
           </View>
-          <Text className="text-gray-500 text-xs font-bold mb-2 uppercase tracking-widest pl-1">Name Your Tracker</Text>
-          <View className={`flex-row items-center bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 border ${titleError ? 'border-red-500' : 'border-gray-100 dark:border-gray-700'}`}>
+          <Text style={[styles.smallLabel, { color: theme.gray }]}>NAME YOUR TRACKER</Text>
+          <View style={[styles.inputWrapper, { backgroundColor: theme.lightGray, borderColor: titleError ? theme.error : theme.border }]}>
             <TextInput
               value={appTitle}
               onChangeText={(text) => {
@@ -212,7 +216,8 @@ export default function SettingsScreen() {
                 }
               }}
               placeholder="e.g., My Business Tracker"
-              className="flex-1 py-4 text-lg font-bold text-black dark:text-white"
+              placeholderTextColor={theme.gray}
+              style={[styles.titleInput, { color: theme.text }]}
             />
             {!titleError && appTitle.trim().length > 0 && (
               <TouchableOpacity
@@ -231,19 +236,20 @@ export default function SettingsScreen() {
               </TouchableOpacity>
             )}
           </View>
-          {titleError && <Text className="text-red-500 text-xs ml-1 mt-2 font-bold">{titleError}</Text>}
+          {titleError && <Text style={[styles.errorText, { color: theme.error }]}>{titleError}</Text>}
         </View>
 
-        <View className="bg-white dark:bg-gray-900 p-6 rounded-3xl shadow-sm mb-6 border border-gray-100 dark:border-gray-800">
-          <View className="flex-row justify-between items-center mb-4">
-             <Text className="text-lg font-bold text-black dark:text-white">Cash Flow & Budget</Text>
-             <View className="bg-cyan-100 dark:bg-cyan-900/30 px-2 py-1 rounded-lg">
-                <Text className="text-cyan-800 dark:text-cyan-400 text-[10px] font-bold">Monthly Tracker</Text>
+        {/* Budget Section */}
+        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <View style={styles.cardHeader}>
+             <Text style={[styles.cardTitle, { color: theme.text }]}>Cash Flow & Budget</Text>
+             <View style={[styles.badge, { backgroundColor: theme.primaryBg }]}>
+                <Text style={[styles.badgeText, { color: theme.primary }]}>Monthly Tracker</Text>
              </View>
           </View>
           
-          <View className="flex-row justify-between items-center mb-6 bg-gray-50 dark:bg-gray-800 p-3 rounded-2xl">
-            <TouchableOpacity onPress={() => changeMonth(-1)} className="p-2">
+          <View style={[styles.monthNavigator, { backgroundColor: theme.lightGray }]}>
+            <TouchableOpacity onPress={() => changeMonth(-1)} style={styles.navBtn}>
               <Ionicons name="chevron-back" size={24} color={theme.primary} />
             </TouchableOpacity>
             <TouchableOpacity 
@@ -251,34 +257,32 @@ export default function SettingsScreen() {
                 setTempDate(new Date(currentDate));
                 setShowPicker(true);
               }}
-              className="flex-row items-center px-4 py-2"
+              style={styles.monthPickerTrigger}
             >
-              <Text className="text-sm font-bold text-gray-600 dark:text-gray-400 mr-1">
+              <Text style={[styles.monthText, { color: theme.text }]}>
                 {formattedMonth}
               </Text>
               <Ionicons name="caret-down" size={12} color={theme.gray} />
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => changeMonth(1)} className="p-2">
+            <TouchableOpacity onPress={() => changeMonth(1)} style={styles.navBtn}>
               <Ionicons name="chevron-forward" size={24} color={theme.primary} />
             </TouchableOpacity>
           </View>
 
-          {/* Month/Year Picker Modal */}
           <Modal
             visible={showPicker}
             transparent={true}
             animationType="fade"
             onRequestClose={() => setShowPicker(false)}
           >
-            <View className="flex-1 justify-center items-center bg-black/50 px-6">
-              <View className="bg-white dark:bg-gray-900 w-full rounded-3xl p-6 shadow-2xl border border-gray-100 dark:border-gray-800">
-                <Text className="text-xl font-bold mb-6 text-center text-black dark:text-white">Choose Budget Month</Text>
+            <View style={styles.modalOverlay}>
+              <View style={[styles.modalContent, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <Text style={[styles.modalTitle, { color: theme.text }]}>Choose Budget Month</Text>
                 
-                <View className="flex-row justify-between mb-8">
-                  {/* Year Selection */}
-                  <View className="flex-1 mr-2">
-                    <Text className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 text-center">Year</Text>
-                    <ScrollView style={{ maxHeight: 200 }} showsVerticalScrollIndicator={false}>
+                <View style={styles.pickerContainer}>
+                  <View style={styles.pickerColumn}>
+                    <Text style={[styles.pickerLabel, { color: theme.gray }]}>YEAR</Text>
+                    <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
                       {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(year => (
                         <TouchableOpacity 
                           key={year} 
@@ -287,9 +291,9 @@ export default function SettingsScreen() {
                             nd.setFullYear(year);
                             setTempDate(nd);
                           }}
-                          className={`py-3 rounded-xl mb-1 ${tempDate.getFullYear() === year ? 'bg-cyan-100 dark:bg-cyan-900/40' : ''}`}
+                          style={[styles.pickerItem, tempDate.getFullYear() === year ? { backgroundColor: theme.primaryBg } : {}]}
                         >
-                          <Text className={`text-center font-bold ${tempDate.getFullYear() === year ? 'text-cyan-800 dark:text-cyan-400' : 'text-gray-500'}`}>
+                          <Text style={[styles.pickerItemText, tempDate.getFullYear() === year ? { color: theme.primary, fontWeight: 'bold' } : { color: theme.gray }]}>
                             {year}
                           </Text>
                         </TouchableOpacity>
@@ -297,10 +301,9 @@ export default function SettingsScreen() {
                     </ScrollView>
                   </View>
 
-                  {/* Month Selection */}
-                  <View className="flex-1 ml-2">
-                    <Text className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 text-center">Month</Text>
-                    <ScrollView style={{ maxHeight: 200 }} showsVerticalScrollIndicator={false}>
+                  <View style={styles.pickerColumn}>
+                    <Text style={[styles.pickerLabel, { color: theme.gray }]}>MONTH</Text>
+                    <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
                       {Array.from({ length: 12 }, (_, i) => i).map(month => {
                         const mName = new Date(2000, month).toLocaleString('default', { month: 'short' });
                         const isSelected = tempDate.getMonth() === month;
@@ -312,9 +315,9 @@ export default function SettingsScreen() {
                               nd.setMonth(month);
                               setTempDate(nd);
                             }}
-                            className={`py-3 rounded-xl mb-1 ${isSelected ? 'bg-cyan-100 dark:bg-cyan-900/40' : ''}`}
+                            style={[styles.pickerItem, isSelected ? { backgroundColor: theme.primaryBg } : {}]}
                           >
-                            <Text className={`text-center font-bold ${isSelected ? 'text-cyan-800 dark:text-cyan-400' : 'text-gray-500'}`}>
+                            <Text style={[styles.pickerItemText, isSelected ? { color: theme.primary, fontWeight: 'bold' } : { color: theme.gray }]}>
                               {mName}
                             </Text>
                           </TouchableOpacity>
@@ -324,113 +327,348 @@ export default function SettingsScreen() {
                   </View>
                 </View>
 
-                <View className="flex-row gap-3">
+                <View style={styles.modalActions}>
                   <TouchableOpacity 
                     onPress={() => setShowPicker(false)}
-                    className="flex-1 p-4 rounded-2xl bg-gray-100 dark:bg-gray-800"
+                    style={[styles.modalActionBtn, { backgroundColor: theme.lightGray }]}
                   >
-                    <Text className="text-center font-bold text-gray-600 dark:text-gray-400">Cancel</Text>
+                    <Text style={{ color: theme.gray, fontWeight: 'bold' }}>Cancel</Text>
                   </TouchableOpacity>
                   <TouchableOpacity 
                     onPress={() => {
                       setCurrentDate(new Date(tempDate));
                       setShowPicker(false);
                     }}
-                    className="flex-1 p-4 rounded-2xl bg-cyan-800"
+                    style={[styles.modalActionBtn, { backgroundColor: theme.primary }]}
                   >
-                    <Text className="text-center font-bold text-white">Apply</Text>
+                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>Apply</Text>
                   </TouchableOpacity>
                 </View>
               </View>
             </View>
           </Modal>
 
-        <View className="mb-6">
-          <Text className="text-gray-500 text-xs font-bold mb-2 uppercase tracking-widest pl-1">Set Limit (₹)</Text>
-          <View className="flex-row items-center bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 border border-gray-100 dark:border-gray-700">
-            <TextInput
-              value={budgetLimit}
-              onChangeText={setBudgetLimit}
-              keyboardType="numeric"
-              placeholder="0.00"
-              className="flex-1 py-4 text-2xl font-bold text-black dark:text-white"
+          <View style={styles.marginB24}>
+            <Text style={[styles.smallLabel, { color: theme.gray }]}>SET LIMIT (₹)</Text>
+            <View style={[styles.inputWrapper, { backgroundColor: theme.lightGray, borderColor: theme.border }]}>
+              <TextInput
+                value={budgetLimit}
+                onChangeText={setBudgetLimit}
+                keyboardType="numeric"
+                placeholder="0.00"
+                placeholderTextColor={theme.gray}
+                style={[styles.budgetInput, { color: theme.text }]}
+              />
+              {budgetLimit !== lastSavedBudget && (
+                <TouchableOpacity
+                  onPress={handleSaveBudget}
+                  style={[styles.saveBtn, { backgroundColor: theme.success }]}
+                >
+                  <Ionicons name="checkmark" size={20} color="white" />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
+          <View style={styles.statsRow}>
+            <View style={styles.flex1}>
+              <Text style={[styles.tinyLabel, { color: theme.gray }]}>MONTHLY INCOME</Text>
+              <Text style={[styles.incomeVal, { color: theme.success }]}>+ ₹{income.toFixed(0)}</Text>
+            </View>
+            <View style={[styles.flex1, styles.alignEnd]}>
+              <Text style={[styles.tinyLabel, { color: theme.gray }]}>MONTHLY EXPENSES</Text>
+              <Text style={[styles.expenseVal, { color: theme.text }]}>₹{spent.toFixed(0)}</Text>
+            </View>
+          </View>
+
+          <View style={styles.progressLabelRow}>
+            <Text style={[styles.tinyLabel, { color: theme.gray }]}>BUDGET PROGRESS</Text>
+            <Text style={[styles.progressPct, { color: theme.gray }]}>{progress.toFixed(0)}%</Text>
+          </View>
+
+          <View style={[styles.progressBase, { backgroundColor: theme.lightGray }]}>
+            <View 
+              style={[
+                styles.progressFill, 
+                { width: `${Math.min(progress, 100)}%`, backgroundColor: progress >= 100 ? theme.error : theme.primary }
+              ]} 
             />
-            {budgetLimit !== lastSavedBudget && (
-              <TouchableOpacity
-                onPress={handleSaveBudget}
-                style={{
-                  backgroundColor: theme.success,
-                  padding: 8,
-                  borderRadius: 12,
-                }}
-              >
-                <Ionicons name="checkmark" size={20} color="white" />
-              </TouchableOpacity>
+          </View>
+          
+          {progress > 80 && (
+            <View style={[styles.warningBox, { backgroundColor: theme.error + '15', borderColor: theme.error + '30' }]}>
+              <Ionicons name="warning" size={16} color={theme.error} />
+              <Text style={[styles.warningText, { color: theme.error }]}>
+                {progress >= 100 ? "Budget Limit Exceeded!" : "High Spending Alert: Over 80% Used"}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Account Section */}
+        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <Text style={[styles.cardTitle, { color: theme.text, marginBottom: 16 }]}>Account</Text>
+          
+          <TouchableOpacity 
+            style={[styles.settingsRow, { borderBottomColor: theme.border }]}
+            onPress={() => setPasswordModalVisible(true)}
+          >
+            <View style={[styles.settingsIconWrap, { backgroundColor: theme.primaryBg }]}>
+              <Ionicons name="lock-closed-outline" size={20} color={theme.primary} />
+            </View>
+            <View style={styles.flex1}>
+              <Text style={[styles.settingsRowTitle, { color: theme.text }]}>Change Password</Text>
+              <Text style={[styles.settingsRowSub, { color: theme.gray }]}>Update your account password</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={theme.tabIconDefault} />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.settingsRow, { borderBottomColor: theme.border }]}
+            onPress={() => router.push("/notifications" as any)}
+          >
+            <View style={[styles.settingsIconWrap, { backgroundColor: theme.primaryBg }]}>
+              <Ionicons name="notifications-outline" size={20} color={theme.primary} />
+            </View>
+            <View style={styles.flex1}>
+              <Text style={[styles.settingsRowTitle, { color: theme.text }]}>Notifications</Text>
+              <Text style={[styles.settingsRowSub, { color: theme.gray }]}>View notification history</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={theme.tabIconDefault} />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.settingsRow, { borderBottomWidth: 0 }]}
+            onPress={() => router.push("/privacy" as any)}
+          >
+            <View style={[styles.settingsIconWrap, { backgroundColor: theme.primaryBg }]}>
+              <Ionicons name="shield-checkmark-outline" size={20} color={theme.primary} />
+            </View>
+            <View style={styles.flex1}>
+              <Text style={[styles.settingsRowTitle, { color: theme.text }]}>Privacy & Security</Text>
+              <Text style={[styles.settingsRowSub, { color: theme.gray }]}>Data protection info</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={theme.tabIconDefault} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Support Section */}
+        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <Text style={[styles.cardTitle, { color: theme.text, marginBottom: 16 }]}>Support</Text>
+          
+          <TouchableOpacity 
+            style={[styles.settingsRow, { borderBottomColor: theme.border }]}
+            onPress={() => router.push("/help-center" as any)}
+          >
+            <View style={[styles.settingsIconWrap, { backgroundColor: theme.primaryBg }]}>
+              <Ionicons name="help-circle-outline" size={20} color={theme.primary} />
+            </View>
+            <View style={styles.flex1}>
+              <Text style={[styles.settingsRowTitle, { color: theme.text }]}>Help Center</Text>
+              <Text style={[styles.settingsRowSub, { color: theme.gray }]}>FAQs and contact support</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={theme.tabIconDefault} />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.settingsRow, { borderBottomColor: theme.border }]}
+            onPress={() => router.push("/rate-app" as any)}
+          >
+            <View style={[styles.settingsIconWrap, { backgroundColor: theme.primaryBg }]}>
+              <Ionicons name="star-outline" size={20} color={theme.primary} />
+            </View>
+            <View style={styles.flex1}>
+              <Text style={[styles.settingsRowTitle, { color: theme.text }]}>Rate App</Text>
+              <Text style={[styles.settingsRowSub, { color: theme.gray }]}>Love the app? Let us know!</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={theme.tabIconDefault} />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.settingsRow, { borderBottomWidth: 0 }]}
+            onPress={() => router.push("/about" as any)}
+          >
+            <View style={[styles.settingsIconWrap, { backgroundColor: theme.primaryBg }]}>
+              <Ionicons name="information-circle-outline" size={20} color={theme.primary} />
+            </View>
+            <View style={styles.flex1}>
+              <Text style={[styles.settingsRowTitle, { color: theme.text }]}>About</Text>
+              <Text style={[styles.settingsRowSub, { color: theme.gray }]}>Version 1.0.0</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={theme.tabIconDefault} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Logout */}
+        <TouchableOpacity 
+          style={[styles.logoutBtn, { borderColor: theme.error }]}
+          onPress={() => {
+            Alert.alert("Logout", "Are you sure you want to logout?", [
+              { text: "Cancel", style: "cancel" },
+              { text: "Logout", onPress: logout, style: "destructive" }
+            ]);
+          }}
+        >
+          <Ionicons name="log-out-outline" size={22} color={theme.error} />
+          <Text style={{ color: theme.error, fontSize: 16, fontWeight: 'bold', marginLeft: 10 }}>Log Out</Text>
+        </TouchableOpacity>
+
+        {/* Change Password Modal */}
+        <Modal visible={passwordModalVisible} transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Change Password</Text>
+              <TextInput
+                style={[styles.pwInput, { color: theme.text, borderColor: theme.border, backgroundColor: theme.lightGray }]}
+                placeholder="Current Password"
+                secureTextEntry
+                value={currentPassword}
+                onChangeText={setCurrentPassword}
+                placeholderTextColor={theme.gray}
+              />
+              <TextInput
+                style={[styles.pwInput, { color: theme.text, borderColor: theme.border, backgroundColor: theme.lightGray }]}
+                placeholder="New Password"
+                secureTextEntry
+                value={newPassword}
+                onChangeText={setNewPassword}
+                placeholderTextColor={theme.gray}
+              />
+              <TextInput
+                style={[styles.pwInput, { color: theme.text, borderColor: theme.border, backgroundColor: theme.lightGray }]}
+                placeholder="Confirm New Password"
+                secureTextEntry
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                placeholderTextColor={theme.gray}
+              />
+              <View style={styles.modalActions}>
+                <TouchableOpacity 
+                  onPress={() => setPasswordModalVisible(false)}
+                  style={[styles.modalActionBtn, { backgroundColor: theme.lightGray }]}
+                >
+                  <Text style={{ color: theme.gray, fontWeight: 'bold' }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  onPress={async () => {
+                    if (!currentPassword || !newPassword || !confirmPassword) {
+                      Alert.alert('Error', 'Please fill in all fields'); return;
+                    }
+                    if (newPassword !== confirmPassword) {
+                      Alert.alert('Error', 'New passwords do not match'); return;
+                    }
+                    setPwLoading(true);
+                    try {
+                      await api.put('/auth/change-password', { currentPassword, newPassword });
+                      setPasswordModalVisible(false);
+                      setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
+                      showNotification('Password changed successfully!', 'success');
+                    } catch (e: any) {
+                      Alert.alert('Error', e.response?.data?.message || 'Failed to change password');
+                    } finally { setPwLoading(false); }
+                  }}
+                  style={[styles.modalActionBtn, { backgroundColor: theme.primary }]}
+                  disabled={pwLoading}
+                >
+                  {pwLoading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={{ color: '#fff', fontWeight: 'bold' }}>Update</Text>}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        <View style={styles.paddingB40} />
+      </ScrollView>
+
+      {/* Photo Preview Modal */}
+      <Modal
+        visible={previewModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setPreviewModalVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' }}>
+          <TouchableOpacity 
+            style={{ position: 'absolute', top: 10, right: 10, zIndex: 1, padding: 10 }}
+            onPress={() => setPreviewModalVisible(false)}
+          >
+            <Ionicons name="close" size={20} color="white" />
+          </TouchableOpacity>
+          
+          <View style={{ width: '90%', aspectRatio: 1, backgroundColor: theme.card, borderRadius: 20, overflow: 'hidden', borderWidth: 2, borderColor: theme.border }}>
+            {user?.profilePhoto ? (
+              <Image source={{ uri: user.profilePhoto }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+            ) : (
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.primary }}>
+                 <Text style={{ fontSize: 100, fontWeight: 'bold', color: 'white' }}>{user?.name?.[0]?.toUpperCase() || 'U'}</Text>
+              </View>
             )}
           </View>
         </View>
-
-        <View className="flex-row justify-between items-end mb-4">
-          <View className="flex-1">
-            <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest pl-1">Monthly Income</Text>
-            <Text className="text-lg font-bold text-green-600 dark:text-green-400">+ ₹{income.toFixed(0)}</Text>
-          </View>
-          <View className="flex-1 items-end">
-            <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest pr-1">Monthly Expenses</Text>
-            <Text className="text-lg font-bold text-black dark:text-white">₹{spent.toFixed(0)}</Text>
-          </View>
-        </View>
-
-        <View className="flex-row justify-between items-center mb-2">
-          <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest pl-1">Budget Progress</Text>
-          <Text className="text-gray-400 font-bold">{progress.toFixed(0)}%</Text>
-        </View>
-
-        <View className="h-4 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-          <View 
-            className={`h-full ${progressColor}`} 
-            style={{ width: `${progress}%` }} 
-          />
-        </View>
-        
-        {progress > 80 && (
-          <View className="mt-3 flex-row items-center justify-center bg-red-50 dark:bg-red-900/20 p-2 rounded-xl border border-red-100 dark:border-red-900/30">
-            <Ionicons name="warning" size={16} color={theme.error} />
-            <Text className="text-red-600 dark:text-red-400 text-xs font-bold ml-2">
-              {progress >= 100 ? "Budget Limit Exceeded!" : "High Spending Alert: Over 80% Used"}
-            </Text>
-          </View>
-        )}
-      </View>
-
-      {/* Appearance Section */}
-        <View className="bg-white dark:bg-gray-900 p-6 rounded-3xl shadow-sm mb-10 border border-gray-100 dark:border-gray-800">
-          <Text className="text-lg font-bold mb-4 text-black dark:text-white">Appearance</Text>
-          <View className="flex-row justify-between items-center bg-gray-50 dark:bg-gray-800 p-4 rounded-2xl">
-            <View className="flex-row items-center">
-              <View className={`p-2 rounded-xl mr-3 ${colorScheme === 'dark' ? 'bg-indigo-900/30' : 'bg-yellow-100'}`}>
-                <Ionicons name={colorScheme === 'dark' ? 'moon' : 'sunny'} size={20} color={colorScheme === 'dark' ? theme.accent : theme.warning} />
-              </View>
-              <View>
-                <Text className="font-bold text-black dark:text-white">Theme Mode</Text>
-                <Text className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">{colorScheme === 'dark' ? 'Dark Mode' : 'Light Mode'}</Text>
-              </View>
-            </View>
-            <Switch
-              value={colorScheme === 'dark'}
-              onValueChange={() => {
-                toggleColorScheme();
-                showNotification(
-                  `Switched to ${colorScheme === 'dark' ? 'Light' : 'Dark'} mode`,
-                  "info"
-                );
-              }}
-              trackColor={{ false: theme.tabIconDefault, true: theme.border }}
-              thumbColor={colorScheme === 'dark' ? theme.accent : theme.warning}
-            />
-          </View>
-        </View>
-    </ScrollView>
+      </Modal>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safeArea: { flex: 1 },
+  flex1: { flex: 1 },
+  scrollContent: { padding: 16 },
+  header: { marginTop: 16, marginBottom: 24 },
+  headerTitle: { fontSize: 32, fontWeight: '800' },
+  profileCard: { padding: 16, borderRadius: 28, borderWidth: 1, marginBottom: 24 },
+  profileRow: { flexDirection: 'row', alignItems: 'center' },
+  avatarContainer: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginRight: 16, overflow: 'hidden', borderWidth: 2 },
+  avatar: { width: '100%', height: '100%' },
+  avatarInitial: { color: 'white', fontWeight: 'bold', fontSize: 24 },
+  uploadOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' },
+  profileName: { fontSize: 20, fontWeight: 'bold' },
+  profileSubtitle: { fontSize: 10, fontWeight: '800', letterSpacing: 1, marginTop: 2 },
+  card: { padding: 24, borderRadius: 32, borderWidth: 1, marginBottom: 24 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  cardTitle: { fontSize: 18, fontWeight: 'bold' },
+  savedBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 },
+  savedText: { fontSize: 11, fontWeight: 'bold', marginLeft: 4 },
+  smallLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 1, marginBottom: 8, paddingLeft: 4 },
+  inputWrapper: { flexDirection: 'row', alignItems: 'center', borderRadius: 20, paddingHorizontal: 16, borderWidth: 1 },
+  titleInput: { flex: 1, paddingVertical: 14, fontSize: 16, fontWeight: 'bold' },
+  errorText: { fontSize: 11, fontWeight: 'bold', marginTop: 8, marginLeft: 4 },
+  badge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 },
+  badgeText: { fontSize: 10, fontWeight: '900' },
+  monthNavigator: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 8, borderRadius: 20, marginBottom: 24 },
+  navBtn: { padding: 10 },
+  monthPickerTrigger: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8 },
+  monthText: { fontSize: 15, fontWeight: 'bold', marginRight: 4 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalContent: { width: '100%', padding: 28, borderRadius: 36, borderWidth: 1 },
+  modalTitle: { fontSize: 22, fontWeight: 'bold', marginBottom: 24, textAlign: 'center' },
+  pickerContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 32 },
+  pickerColumn: { flex: 1, marginHorizontal: 8 },
+  pickerLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginBottom: 16, textAlign: 'center' },
+  pickerScroll: { maxHeight: 180 },
+  pickerItem: { paddingVertical: 12, borderRadius: 16, marginBottom: 4 },
+  pickerItemText: { textAlign: 'center', fontSize: 15 },
+  modalActions: { flexDirection: 'row', gap: 12 },
+  modalActionBtn: { flex: 1, padding: 16, borderRadius: 20, alignItems: 'center' },
+  marginB24: { marginBottom: 24 },
+  budgetInput: { flex: 1, paddingVertical: 14, fontSize: 24, fontWeight: '800' },
+  saveBtn: { padding: 10, borderRadius: 12 },
+  statsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 16 },
+  tinyLabel: { fontSize: 9, fontWeight: '900', letterSpacing: 1.2, marginBottom: 4 },
+  incomeVal: { fontSize: 17, fontWeight: 'bold' },
+  expenseVal: { fontSize: 17, fontWeight: 'bold' },
+  progressLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  progressPct: { fontSize: 12, fontWeight: 'bold' },
+  progressBase: { height: 14, borderRadius: 7, overflow: 'hidden' },
+  progressFill: { height: '100%', borderRadius: 7 },
+  warningBox: { marginTop: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, borderRadius: 16, borderWidth: 1 },
+  warningText: { fontSize: 12, fontWeight: 'bold', marginLeft: 8 },
+  alignEnd: { alignItems: 'flex-end' },
+  paddingB40: { paddingBottom: 40 },
+  settingsRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1 },
+  settingsIconWrap: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
+  settingsRowTitle: { fontSize: 15, fontWeight: '600' },
+  settingsRowSub: { fontSize: 12, marginTop: 2 },
+  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, borderRadius: 20, borderWidth: 1.5, marginBottom: 50 },
+  pwInput: { borderWidth: 1, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, marginBottom: 12 },
+});

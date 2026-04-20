@@ -1,14 +1,14 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Tabs } from "expo-router";
 import { useColorScheme } from "nativewind";
-import { Platform } from "react-native";
+import { Platform, View, Text } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors } from "../../constants/colors";
+import { useTheme } from "../../context/ThemeContext";
 
 export default function TabLayout() {
-  const { colorScheme } = useColorScheme();
-  const theme = Colors[colorScheme ?? "light"];
-  const isDark = colorScheme === "dark";
+  const { theme } = useTheme();
+  const isDark = theme.background === "#000000" || theme.background === "#020617" || theme.background === "#0F0F17";
   const insets = useSafeAreaInsets();
 
   return (
@@ -16,13 +16,14 @@ export default function TabLayout() {
       screenOptions={{
         tabBarActiveTintColor: theme.primary,
         tabBarInactiveTintColor: theme.tabIconDefault,
+        tabBarShowLabel: false,
         tabBarStyle: {
           backgroundColor: theme.background,
           borderTopWidth: 1,
           borderTopColor: theme.border,
-          paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 20 : 10),
-          paddingTop: 10,
-          height: 60 + Math.max(insets.bottom, Platform.OS === 'ios' ? 20 : 10),
+          height: 60 + Math.max(insets.bottom, Platform.OS === 'ios' ? 16 : 0),
+          paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 16 : 6),
+          paddingTop: 14,
         },
         headerStyle: {
           backgroundColor: theme.background,
@@ -38,8 +39,11 @@ export default function TabLayout() {
         name="index"
         options={{
           title: "Home",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home" size={size} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <View style={{ alignItems: 'center', justifyContent: 'center', backgroundColor: focused ? theme.primaryBg : 'transparent', width: 64, height: 50, borderRadius: 10 }}>
+               <Ionicons name="home" size={24} color={focused ? theme.primary : theme.tabIconDefault} />
+               <Text numberOfLines={1} style={{ color: focused ? theme.primary : theme.tabIconDefault, fontSize: 10, fontWeight: 'bold', marginTop: 2 }}>Home</Text>
+            </View>
           ),
           headerShown: false,
         }}
@@ -48,8 +52,11 @@ export default function TabLayout() {
         name="goals"
         options={{
           title: "Goals",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="trophy" size={size} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <View style={{ alignItems: 'center', justifyContent: 'center', backgroundColor: focused ? theme.primaryBg : 'transparent', width: 64, height: 50, borderRadius: 10 }}>
+               <Ionicons name="trophy" size={24} color={focused ? theme.primary : theme.tabIconDefault} />
+               <Text numberOfLines={1} style={{ color: focused ? theme.primary : theme.tabIconDefault, fontSize: 10, fontWeight: 'bold', marginTop: 2 }}>Goals</Text>
+            </View>
           ),
           headerShown: false,
         }}
@@ -58,8 +65,11 @@ export default function TabLayout() {
         name="analytics"
         options={{
           title: "Analytics",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="pie-chart" size={size} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <View style={{ alignItems: 'center', justifyContent: 'center', backgroundColor: focused ? theme.primaryBg : 'transparent', width: 64, height: 50, borderRadius: 10 }}>
+               <Ionicons name="pie-chart" size={24} color={focused ? theme.primary : theme.tabIconDefault} />
+               <Text numberOfLines={1} style={{ color: focused ? theme.primary : theme.tabIconDefault, fontSize: 10, fontWeight: 'bold', marginTop: 2 }}>Stats</Text>
+            </View>
           ),
           headerShown: false,
         }}
@@ -69,8 +79,11 @@ export default function TabLayout() {
         options={{
           href: null,
           title: "Notifications",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="notifications" size={size} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <View style={{ alignItems: 'center', justifyContent: 'center', backgroundColor: focused ? theme.primaryBg : 'transparent', width: 64, height: 50, borderRadius: 10 }}>
+               <Ionicons name="notifications" size={24} color={focused ? theme.primary : theme.tabIconDefault} />
+               <Text numberOfLines={1} style={{ color: focused ? theme.primary : theme.tabIconDefault, fontSize: 10, fontWeight: 'bold', marginTop: 2 }}>Alerts</Text>
+            </View>
           ),
           headerShown: false,
         }}
@@ -79,8 +92,11 @@ export default function TabLayout() {
         name="advisor"
         options={{
           title: "Advisor",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="sparkles" size={size} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <View style={{ alignItems: 'center', justifyContent: 'center', backgroundColor: focused ? theme.primaryBg : 'transparent', width: 64, height: 50, borderRadius: 10 }}>
+               <Ionicons name="sparkles" size={24} color={focused ? theme.primary : theme.tabIconDefault} />
+               <Text numberOfLines={1} style={{ color: focused ? theme.primary : theme.tabIconDefault, fontSize: 10, fontWeight: 'bold', marginTop: 2 }}>Advisor</Text>
+            </View>
           ),
           headerShown: false,
         }}
@@ -90,8 +106,11 @@ export default function TabLayout() {
         options={{
           href: null,
           title: "Profile",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person" size={size} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <View style={{ alignItems: 'center', justifyContent: 'center', backgroundColor: focused ? theme.primaryBg : 'transparent', width: 64, height: 50, borderRadius: 10 }}>
+               <Ionicons name="person" size={24} color={focused ? theme.primary : theme.tabIconDefault} />
+               <Text numberOfLines={1} style={{ color: focused ? theme.primary : theme.tabIconDefault, fontSize: 10, fontWeight: 'bold', marginTop: 2 }}>Profile</Text>
+            </View>
           ),
           headerShown: false,
         }}
@@ -100,8 +119,11 @@ export default function TabLayout() {
         name="settings"
         options={{
           title: "Settings",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="settings" size={size} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <View style={{ alignItems: 'center', justifyContent: 'center', backgroundColor: focused ? theme.primaryBg : 'transparent', width: 64, height: 50, borderRadius: 10 }}>
+               <Ionicons name="settings" size={24} color={focused ? theme.primary : theme.tabIconDefault} />
+               <Text numberOfLines={1} style={{ color: focused ? theme.primary : theme.tabIconDefault, fontSize: 10, fontWeight: 'bold', marginTop: 2 }}>Settings</Text>
+            </View>
           ),
           headerShown: false,
         }}

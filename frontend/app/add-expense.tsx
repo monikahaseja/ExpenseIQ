@@ -1,6 +1,6 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useColorScheme } from "nativewind";
+import { useTheme } from "../context/ThemeContext";
 import React, { useEffect, useState } from "react";
 import {
   Alert,
@@ -24,8 +24,7 @@ import api from "../utils/api";
 import { API_URL } from "../constants/api";
 
 export default function AddExpenseScreen() {
-  const { colorScheme } = useColorScheme();
-  const theme = Colors[colorScheme ?? "light"];
+  const { theme } = useTheme();
   const router = useRouter();
   const params = useLocalSearchParams();
   const { showNotification } = useNotification();
@@ -203,7 +202,8 @@ export default function AddExpenseScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        className="flex-1 bg-gray-50 dark:bg-black"
+        className="flex-1"
+        style={{ backgroundColor: theme.background }}
       >
         <ScrollView
           className="flex-1 p-4"
@@ -213,12 +213,12 @@ export default function AddExpenseScreen() {
             <TouchableOpacity onPress={() => router.back()} className="mr-3 p-2 -ml-2">
               <Ionicons name="arrow-back" size={28} color={theme.text} />
             </TouchableOpacity>
-            <Text className="text-3xl font-extrabold text-black dark:text-white">
+            <Text className="text-3xl font-extrabold" style={{ color: theme.text }}>
               {expenseId ? "Edit Transaction" : "New Transaction"}
             </Text>
           </View>
 
-          <View className="flex-row bg-white dark:bg-gray-900 p-1 rounded-2xl mb-6 shadow-sm border border-gray-100 dark:border-gray-800">
+          <View className="flex-row p-1 rounded-2xl mb-6 shadow-sm border" style={{ backgroundColor: theme.card, borderColor: theme.border }}>
           <TouchableOpacity
             onPress={() => setType("expense")}
             className={`flex-1 py-3 rounded-xl items-center ${type === "expense" ? "bg-red-800" : ""}`}
@@ -241,12 +241,13 @@ export default function AddExpenseScreen() {
           </TouchableOpacity>
         </View>
 
-        <View className="bg-white dark:bg-gray-900 p-6 rounded-3xl shadow-sm mb-6 border border-gray-100 dark:border-gray-800">
+        <View className="p-6 rounded-3xl shadow-sm mb-6 border" style={{ backgroundColor: theme.card, borderColor: theme.border }}>
           <Text className="text-gray-400 font-bold text-xs mb-3 uppercase tracking-widest ml-1">
             Task Description
           </Text>
           <View
-            className={`flex-row items-center bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-4 mb-2 border ${titleError ? "border-red-500" : "border-gray-100 dark:border-gray-700"}`}
+            className="flex-row items-center rounded-2xl px-4 py-4 mb-2 border"
+            style={{ backgroundColor: theme.background, borderColor: titleError ? theme.error : theme.border }}
           >
             <Ionicons
               name="document-text"
@@ -262,7 +263,8 @@ export default function AddExpenseScreen() {
               }}
               placeholder="e.g., Grocery Shopping"
               placeholderTextColor={theme.gray}
-              className="flex-1 ml-3 text-lg text-black dark:text-white"
+              className="flex-1 ml-3 text-lg"
+              style={{ color: theme.text }}
             />
           </View>
           {titleError ? (
@@ -277,7 +279,8 @@ export default function AddExpenseScreen() {
             Tags (Optional)
           </Text>
           <View
-            className="flex-row items-center bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-3 mb-6 border border-gray-100 dark:border-gray-700"
+            className="flex-row items-center rounded-2xl px-4 py-3 mb-6 border"
+            style={{ backgroundColor: theme.background, borderColor: theme.border }}
           >
             <Ionicons
               name="pricetag-outline"
@@ -289,7 +292,8 @@ export default function AddExpenseScreen() {
               onChangeText={setTags}
               placeholder="e.g., breakfast, monthly, trip"
               placeholderTextColor={theme.gray}
-              className="flex-1 ml-3 text-sm text-black dark:text-white"
+              className="flex-1 ml-3 text-sm"
+              style={{ color: theme.text }}
             />
           </View>
 
@@ -297,7 +301,8 @@ export default function AddExpenseScreen() {
             Amount (₹)
           </Text>
           <View
-            className={`flex-row items-center bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-4 mb-2 border ${amountError ? "border-red-500" : "border-gray-100 dark:border-gray-700"}`}
+            className="flex-row items-center rounded-2xl px-4 py-4 mb-2 border"
+            style={{ backgroundColor: theme.background, borderColor: amountError ? theme.error : theme.border }}
           >
             <Text
               style={{ color: amountError ? theme.error : theme.primary }}
@@ -314,7 +319,8 @@ export default function AddExpenseScreen() {
               keyboardType="numeric"
               placeholder="0.00"
               placeholderTextColor={theme.gray}
-              className="flex-1 text-2xl font-bold text-black dark:text-white"
+              className="flex-1 text-2xl font-bold"
+              style={{ color: theme.text }}
             />
           </View>
           {amountError && (
@@ -335,16 +341,17 @@ export default function AddExpenseScreen() {
               <TouchableOpacity
                 key={cat.id}
                 onPress={() => setCategory(cat.id)}
-                className={`items-center p-3 rounded-2xl mr-3 border-2 ${category === cat.id ? "border-cyan-800 bg-cyan-50 dark:bg-cyan-900/20" : "border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800"}`}
-                style={{ width: 100 }}
+                className={`items-center p-3 rounded-2xl mr-3 border-2`}
+                style={{ width: 100, backgroundColor: category === cat.id ? theme.primaryBg : theme.background, borderColor: category === cat.id ? theme.primary : theme.border }}
               >
                 <Ionicons
                   name={cat.icon as any}
                   size={24}
-                  color={category === cat.id ? "#0e7490" : "#94a3b8"}
+                  color={category === cat.id ? theme.primary : theme.gray}
                 />
                 <Text
-                  className={`text-[10px] font-bold mt-1 text-center ${category === cat.id ? "text-cyan-800 dark:text-cyan-400" : "text-gray-500"}`}
+                  className={`text-[10px] font-bold mt-1 text-center`}
+                  style={{ color: category === cat.id ? theme.primary : theme.gray }}
                 >
                   {cat.name}
                 </Text>
@@ -354,14 +361,16 @@ export default function AddExpenseScreen() {
 
           {category === "others" && (
             <View
-              className="flex-row items-center bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-3 mb-2 mt-4 border border-gray-100 dark:border-gray-700"
+              className="flex-row items-center rounded-2xl px-4 py-3 mb-2 mt-4 border"
+              style={{ backgroundColor: theme.background, borderColor: theme.border }}
             >
               <TextInput
                 value={customCategory}
                 onChangeText={setCustomCategory}
                 placeholder="Enter custom category name (e.g. Travel)"
                 placeholderTextColor={theme.gray}
-                className="flex-1 ml-1 text-sm text-black dark:text-white"
+                className="flex-1 ml-1 text-sm"
+                style={{ color: theme.text }}
               />
             </View>
           )}
@@ -378,15 +387,17 @@ export default function AddExpenseScreen() {
               <TouchableOpacity
                 key={mode.id}
                 onPress={() => setPaymentMode(mode.id)}
-                className={`flex-row items-center px-4 py-3 rounded-2xl mr-3 border-2 ${paymentMode === mode.id ? "border-cyan-800 bg-cyan-50 dark:bg-cyan-900/20" : "border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800"}`}
+                className={`flex-row items-center px-4 py-3 rounded-2xl mr-3 border-2`}
+                style={{ backgroundColor: paymentMode === mode.id ? theme.primaryBg : theme.background, borderColor: paymentMode === mode.id ? theme.primary : theme.border }}
               >
                 <Ionicons
                   name={mode.icon as any}
                   size={20}
-                  color={paymentMode === mode.id ? "#0e7490" : "#94a3b8"}
+                  color={paymentMode === mode.id ? theme.primary : theme.gray}
                 />
                 <Text
-                  className={`text-xs font-bold ml-2 ${paymentMode === mode.id ? "text-cyan-800 dark:text-cyan-400" : "text-gray-500"}`}
+                  className="text-xs font-bold ml-2"
+                  style={{ color: paymentMode === mode.id ? theme.primary : theme.gray }}
                 >
                   {mode.name}
                 </Text>
@@ -396,16 +407,17 @@ export default function AddExpenseScreen() {
 
           <View className="flex-row items-center justify-between mt-6 px-1">
             <View>
-              <Text className="text-black dark:text-white font-bold text-lg">
+              <Text className="font-bold text-lg" style={{ color: theme.text }}>
                 Recurring
               </Text>
-              <Text className="text-gray-500 text-xs">
+              <Text className="text-xs" style={{ color: theme.gray }}>
                 Repeat this transaction every month
               </Text>
             </View>
             <TouchableOpacity
               onPress={() => setIsRecurring(!isRecurring)}
-              className={`w-14 h-8 rounded-full p-1 ${isRecurring ? "bg-cyan-800" : "bg-gray-300 dark:bg-gray-700"}`}
+              className={`w-14 h-8 rounded-full p-1`}
+              style={{ backgroundColor: isRecurring ? theme.primary : theme.border }}
             >
               <View
                 className={`w-6 h-6 rounded-full bg-white shadow-sm ${isRecurring ? "translate-x-6" : ""}`}
@@ -416,16 +428,17 @@ export default function AddExpenseScreen() {
           {type === "expense" && (
             <View className="flex-row items-center justify-between mt-6 px-1">
               <View>
-                <Text className="text-black dark:text-white font-bold text-lg">
+                <Text className="font-bold text-lg" style={{ color: theme.text }}>
                   Use Limit
                 </Text>
-                <Text className="text-gray-500 text-xs">
+                <Text className="text-xs" style={{ color: theme.gray }}>
                   Deduct this expense from your monthly budget
                 </Text>
               </View>
               <TouchableOpacity
                 onPress={() => setUseLimit(!useLimit)}
-                className={`w-14 h-8 rounded-full p-1 ${useLimit ? "bg-cyan-800" : "bg-gray-300 dark:bg-gray-700"}`}
+                className={`w-14 h-8 rounded-full p-1`}
+                style={{ backgroundColor: useLimit ? theme.primary : theme.border }}
               >
                 <View
                   className={`w-6 h-6 rounded-full bg-white shadow-sm ${useLimit ? "translate-x-6" : ""}`}
@@ -453,9 +466,10 @@ export default function AddExpenseScreen() {
 
           <TouchableOpacity
             onPress={cancel}
-            className="bg-gray-200 dark:bg-gray-800 p-5 rounded-3xl active:scale-95 transition-transform"
+            className="p-5 rounded-3xl active:scale-95 transition-transform"
+            style={{ backgroundColor: theme.border }}
           >
-            <Text className="text-gray-700 dark:text-gray-300 text-center font-bold text-lg">
+            <Text className="text-center font-bold text-lg" style={{ color: theme.text }}>
               Cancel
             </Text>
           </TouchableOpacity>

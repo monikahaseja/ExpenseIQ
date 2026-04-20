@@ -9,6 +9,7 @@ interface User {
   email: string;
   phoneNumber?: string;
   profilePhoto?: string;
+  createdAt?: string;
 }
 
 interface AuthContextType {
@@ -18,6 +19,7 @@ interface AuthContextType {
   login: (token: string, user: User) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (user: User) => Promise<void>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -66,8 +68,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(updatedUser);
   };
 
+  const refreshProfile = async () => {
+    try {
+      const storedToken = await SecureStore.getItemAsync('userToken');
+      if (!storedToken) return;
+
+      const response = await axios.get(`${API_URL}/auth/profile`, {
+        headers: { Authorization: `Bearer ${storedToken}` }
+      });
+
+      if (response.data.data) {
+        await updateProfile(response.data.data);
+      }
+    } catch (e) {
+      console.error('Failed to refresh profile', e);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, logout, updateProfile }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, logout, updateProfile, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );

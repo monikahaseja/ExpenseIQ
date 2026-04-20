@@ -13,14 +13,15 @@ import * as Sharing from "expo-sharing";
 import * as Print from 'expo-print';
 import { API_URL } from "../../constants/api";
 import { useAuth } from "../../context/AuthContext";
+import { useTheme } from "../../context/ThemeContext";
 import api from "../../utils/api";
 
 const screenWidth = Dimensions.get("window").width;
 
 export default function AnalyticsScreen() {
+  const { theme } = useTheme();
   const { colorScheme } = useColorScheme();
-  const theme = Colors[colorScheme ?? "light"];
-  const isDark = colorScheme === "dark";
+  const isDark = theme.background === "#000000" || theme.background === "#020617" || theme.background === "#0F0F17";
   const { token, isLoading: authLoading } = useAuth();
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -237,10 +238,10 @@ export default function AnalyticsScreen() {
   };
 
   const chartConfig = {
-    backgroundGradientFrom: isDark ? "#111" : "#fff",
-    backgroundGradientTo: isDark ? "#111" : "#fff",
-    color: (opacity = 1) => isDark ? `rgba(255, 255, 255, ${opacity})` : `rgba(14, 116, 144, ${opacity})`,
-    labelColor: (opacity = 1) => isDark ? `rgba(255, 255, 255, ${opacity})` : `rgba(75, 85, 99, ${opacity})`,
+    backgroundGradientFrom: theme.card,
+    backgroundGradientTo: theme.card,
+    color: (opacity = 1) => isDark ? `rgba(255, 255, 255, ${opacity})` : theme.primary,
+    labelColor: (opacity = 1) => isDark ? `rgba(255, 255, 255, ${opacity})` : theme.text,
     strokeWidth: 2,
     barPercentage: 0.5,
     useShadowColorFromDataset: false,
@@ -261,10 +262,11 @@ export default function AnalyticsScreen() {
     <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 40 }}>
       {/* Header */}
       <View className="px-4 pt-4 pb-4 flex-row justify-between items-center">
-        <Text className="text-3xl font-extrabold text-black dark:text-white">Analytics</Text>
+        <Text className="text-3xl font-extrabold" style={{ color: theme.text }}>Analytics</Text>
         <TouchableOpacity 
             onPress={exportToPDF}
-            className="p-3 bg-cyan-800 rounded-2xl flex-row items-center"
+            className="p-3 rounded-2xl flex-row items-center"
+            style={{ backgroundColor: theme.primary }}
         >
             <Ionicons name="document-text-outline" size={20} color="white" />
             <Text className="text-white font-bold ml-2">Export PDF</Text>
@@ -274,7 +276,7 @@ export default function AnalyticsScreen() {
       {/* Month Selector & Custom Dropdown */}
       <View style={{ zIndex: 50, elevation: 10 }}>
         <View className="flex-row items-center mx-4 mb-4">
-            <View className="flex-row justify-between items-center bg-gray-100 dark:bg-gray-800 p-2 rounded-xl flex-1">
+            <View className="flex-row justify-between items-center p-2 rounded-xl flex-1" style={{ backgroundColor: theme.card }}>
               <TouchableOpacity onPress={() => changeMonth(-1)} className="p-2">
                 <Ionicons name="chevron-back" size={24} color={theme.primary} />
               </TouchableOpacity>
@@ -285,7 +287,7 @@ export default function AnalyticsScreen() {
                  }}
                  className="flex-row items-center px-4 py-2"
               >
-                <Text className="text-lg font-bold text-black dark:text-white mr-1">
+                <Text className="text-lg font-bold mr-1" style={{ color: theme.text }}>
                   {currentDate.toLocaleString("default", { month: "long", year: "numeric" })}
                 </Text>
                 <Ionicons name="caret-down" size={12} color={theme.gray} />
@@ -297,17 +299,22 @@ export default function AnalyticsScreen() {
         </View>
       </View>
 
-      <View className="mx-4 mb-4 bg-white dark:bg-gray-800 shadow-sm rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden flex-row justify-around">
+      <View className="mx-4 mb-4 rounded-3xl p-1 shadow-sm border flex-row justify-around" style={{ backgroundColor: theme.card, borderColor: theme.border }}>
           {["Days", "Months", "Years"].map(tf => (
-              <TouchableOpacity key={tf} onPress={() => setTimeframe(tf as any)} className={`p-3 flex-1 items-center border-b-[3px] ${timeframe === tf ? "border-cyan-800 bg-cyan-50 dark:bg-cyan-900/20" : "border-transparent"}`}>
-                  <Text className={`text-center font-bold overflow-visible ${timeframe === tf ? "text-cyan-800 dark:text-cyan-400" : "text-black dark:text-white"}`}>{tf}</Text>
+              <TouchableOpacity 
+                key={tf} 
+                onPress={() => setTimeframe(tf as any)} 
+                className={`py-3 flex-1 items-center rounded-2xl ${timeframe === tf ? "bg-cyan-100 dark:bg-cyan-900/40" : ""}`}
+              >
+                  <Text className={`text-center font-bold`} style={{ color: timeframe === tf ? theme.primary : theme.text }}>{tf}</Text>
               </TouchableOpacity>
           ))}
       </View>
 
+
       {/* Category Breakdown */}
-      <View className="mx-4 mb-4 bg-white dark:bg-gray-900 rounded-3xl p-4 shadow-sm border border-gray-100 dark:border-gray-800">
-        <Text className="text-lg font-bold mb-4 text-black dark:text-white">Category Breakdown</Text>
+      <View className="mx-4 mb-4 rounded-3xl p-4 shadow-sm border" style={{ backgroundColor: theme.card, borderColor: theme.border }}>
+        <Text className="text-lg font-bold mb-4" style={{ color: theme.text }}>Category Breakdown</Text>
         <PieChart
           data={categoryData}
           width={screenWidth - 64}
@@ -321,8 +328,8 @@ export default function AnalyticsScreen() {
       </View>
 
       {/* Weekly Spending */}
-      <View className="mx-4 mb-4 bg-white dark:bg-gray-900 rounded-3xl p-4 shadow-sm border border-gray-100 dark:border-gray-800">
-        <Text className="text-lg font-bold mb-4 text-black dark:text-white">Weekly Spending (₹)</Text>
+      <View className="mx-4 mb-4 rounded-3xl p-4 shadow-sm border" style={{ backgroundColor: theme.card, borderColor: theme.border }}>
+        <Text className="text-lg font-bold mb-4" style={{ color: theme.text }}>Weekly Spending (₹)</Text>
         <BarChart
           data={weeklyData}
           width={screenWidth - 64}
@@ -337,9 +344,9 @@ export default function AnalyticsScreen() {
       </View>
       {/* Heatmap Calendar (Only visible in Days mode) */}
       {timeframe === "Days" && (
-      <View className="mx-4 mb-4 bg-white dark:bg-gray-900 rounded-3xl p-4 shadow-sm border border-gray-100 dark:border-gray-800">
+      <View className="mx-4 mb-4 rounded-3xl p-4 shadow-sm border" style={{ backgroundColor: theme.card, borderColor: theme.border }}>
         <View className="flex-row justify-between items-center mb-4">
-            <Text className="text-lg font-bold text-black dark:text-white">Spending Heatmap</Text>
+            <Text className="text-lg font-bold" style={{ color: theme.text }}>Spending Heatmap</Text>
             <View className="flex-row items-center">
                 <View className="w-3 h-3 bg-green-500 rounded-sm mr-1" />
                 <Text className="text-[10px] text-gray-400 mr-2">Low</Text>
@@ -369,15 +376,15 @@ export default function AnalyticsScreen() {
       )}
 
        {/* Monthly Trend (Line Chart placeholder for now or last 6 months) */}
-       <View className="mx-4 mb-8 bg-white dark:bg-gray-900 rounded-3xl p-4 shadow-sm border border-gray-100 dark:border-gray-800">
-        <Text className="text-lg font-bold mb-4 text-black dark:text-white">Top Categories</Text>
+      <View className="mx-4 mb-8 rounded-3xl p-4 shadow-sm border" style={{ backgroundColor: theme.card, borderColor: theme.border }}>
+        <Text className="text-lg font-bold mb-4" style={{ color: theme.text }}>Top Categories</Text>
         {categoryData.filter(d => d.name !== "No Data").sort((a,b) => b.population - a.population).slice(0, 5).map((cat, i) => (
             <View key={i} className="flex-row items-center justify-between mb-3">
                 <View className="flex-row items-center">
                     <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: cat.color, marginRight: 8 }} />
-                    <Text className="text-gray-600 dark:text-gray-300 font-medium">{cat.name}</Text>
+                    <Text className="font-medium" style={{ color: theme.gray }}>{cat.name}</Text>
                 </View>
-                <Text className="text-black dark:text-white font-bold">₹{cat.population.toFixed(0)}</Text>
+                <Text className="font-bold" style={{ color: theme.text }}>₹{cat.population.toFixed(0)}</Text>
             </View>
         ))}
       </View>
@@ -389,8 +396,8 @@ export default function AnalyticsScreen() {
         onRequestClose={() => setShowPicker(false)}
       >
         <View className="flex-1 justify-center items-center bg-black/50 px-6">
-          <View className="bg-white dark:bg-gray-900 w-full rounded-3xl p-6 shadow-2xl">
-            <Text className="text-xl font-bold mb-6 text-center text-black dark:text-white">
+          <View className="w-full rounded-3xl p-6 shadow-2xl" style={{ backgroundColor: theme.card }}>
+            <Text className="text-xl font-bold mb-6 text-center" style={{ color: theme.text }}>
               Choose Date
             </Text>
 
@@ -415,7 +422,7 @@ export default function AnalyticsScreen() {
                         nd.setFullYear(year);
                         setTempDate(nd);
                       }}
-                      className={`py-3 rounded-xl mb-1 ${tempDate.getFullYear() === year ? "bg-cyan-100 dark:bg-cyan-900/40" : ""}`}
+                      className={`py-3 rounded-2xl mb-1 ${tempDate.getFullYear() === year ? "bg-cyan-100 dark:bg-cyan-900/40" : ""}`}
                     >
                       <Text
                         className={`text-center font-bold ${tempDate.getFullYear() === year ? "text-cyan-800 dark:text-cyan-400" : "text-gray-500"}`}
@@ -450,7 +457,7 @@ export default function AnalyticsScreen() {
                           nd.setMonth(month);
                           setTempDate(nd);
                         }}
-                        className={`py-3 rounded-xl mb-1 ${isSelected ? "bg-cyan-100 dark:bg-cyan-900/40" : ""}`}
+                        className={`py-3 rounded-2xl mb-1 ${isSelected ? "bg-cyan-100 dark:bg-cyan-900/40" : ""}`}
                       >
                         <Text
                           className={`text-center font-bold ${isSelected ? "text-cyan-800 dark:text-cyan-400" : "text-gray-500"}`}

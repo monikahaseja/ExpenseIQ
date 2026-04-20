@@ -1,10 +1,9 @@
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useColorScheme } from "nativewind";
+import { useTheme } from "../context/ThemeContext";
 import React from "react";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { Colors } from "../constants/colors";
 import { CATEGORIES, INCOME_CATEGORIES } from "../constants/categories";
 import { useAuth } from "../context/AuthContext";
 import api from "../utils/api";
@@ -12,8 +11,7 @@ import { API_URL } from "../constants/api";
 import { db } from "../db/database";
 
 export default function ExpenseDetailsScreen() {
-    const { colorScheme } = useColorScheme();
-    const theme = Colors[colorScheme ?? "light"];
+    const { theme } = useTheme();
     const router = useRouter();
     const params = useLocalSearchParams();
     const { user } = useAuth();
@@ -90,7 +88,7 @@ export default function ExpenseDetailsScreen() {
                     {isIncome ? "+" : "-"} ₹ {amount.toFixed(2)}
                 </Text>
 
-                <View style={styles.divider} />
+                <View style={[styles.divider, { backgroundColor: theme.border }]} />
 
                 <View style={styles.infoGrid}>
                     <DetailItem label="Status" value={isIncome ? "Income" : "Expense"} icon="stats-chart" theme={theme} color={categoryColor} />
@@ -112,7 +110,7 @@ export default function ExpenseDetailsScreen() {
                 </View>
 
                 {tags ? (
-                    <View style={styles.tagsSection}>
+                    <View style={[styles.tagsSection, { borderTopColor: theme.border }]}>
                         <Text style={[styles.sectionLabel, { color: theme.tabIconDefault }]}>TAGS</Text>
                         <View style={styles.tagsContainer}>
                             {tags.split(',').map((tag, i) => (

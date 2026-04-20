@@ -1,13 +1,10 @@
 import React, { useState, useCallback } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useColorScheme } from "nativewind";
 import { useFocusEffect } from "@react-navigation/native";
-import { Colors } from "../../constants/colors";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import axios from "axios";
-import { API_URL } from "../../constants/api";
 import { useAuth } from "../../context/AuthContext";
+import { useTheme } from "../../context/ThemeContext";
 import api from "../../utils/api";
 import { useNotification } from "../../components/NotificationContext";
 
@@ -30,9 +27,7 @@ const GOAL_ICONS = [
 const GOAL_COLORS = ["#f87171", "#60a5fa", "#4ade80", "#fbbf24", "#a78bfa", "#f472b6", "#fb7185", "#3b82f6", "#10b981", "#fb923c"];
 
 export default function GoalsScreen() {
-  const { colorScheme } = useColorScheme();
-  const theme = Colors[colorScheme ?? "light"];
-  const isDark = colorScheme === "dark";
+  const { theme } = useTheme();
   const { token, isLoading: authLoading } = useAuth();
   const { showNotification } = useNotification();
 
@@ -45,7 +40,6 @@ export default function GoalsScreen() {
   const [selectedColor, setSelectedColor] = useState("#60a5fa");
   const [loading, setLoading] = useState(false);
   
-  // Progress Adjustment Modal States
   const [adjustModalVisible, setAdjustModalVisible] = useState(false);
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
   const [adjustmentType, setAdjustmentType] = useState<"add" | "subtract">("add");
@@ -94,6 +88,7 @@ export default function GoalsScreen() {
       setTargetAmount("");
       setCurrentAmount("");
       fetchGoals();
+      showNotification("New goal created!", "success");
     } catch (e) {
       console.error("Error saving goal:", e);
       Alert.alert("Error", "Failed to save goal.");
@@ -104,10 +99,9 @@ export default function GoalsScreen() {
 
   const updateGoalProgress = async (goal: Goal, amount: number) => {
     try {
-      const newAmount = goal.current_amount + amount;
       if (token) {
-        await api.put(`/goals/${goal.id}`, {
-          current_amount: newAmount
+        await api.put(`/goals/${goal.id}/progress`, {
+          amount: amount
         });
       }
       fetchGoals();
@@ -117,19 +111,11 @@ export default function GoalsScreen() {
     }
   };
 
-  const handleAdjustProgress = (goal: Goal, type: "add" | "subtract") => {
-    setSelectedGoal(goal);
-    setAdjustmentType(type);
-    setAdjustmentAmount("");
-    setAdjustModalVisible(true);
-  };
-
   const submitAdjustment = async () => {
     if (!selectedGoal || !adjustmentAmount) return;
     const amt = parseFloat(adjustmentAmount);
     if (isNaN(amt) || amt <= 0) return;
     
-    // Validation: prevent adding more than remaining
     const remaining = selectedGoal.target_amount - selectedGoal.current_amount;
     if (adjustmentType === "add" && amt > remaining) {
       Alert.alert(
@@ -152,261 +138,259 @@ export default function GoalsScreen() {
     setLoading(false);
   };
 
-  const deleteGoal = async (id: string) => {
-    Alert.alert(
-      "Delete Goal",
-      "Are you sure you want to delete this goal?",
-      [
+  const deleteGoal = (id: string) => {
+    Alert.alert("Delete Goal", "Are you sure?", [
         { text: "Cancel", style: "cancel" },
         { 
           text: "Delete", 
           style: "destructive",
           onPress: async () => {
             try {
-              if (token) {
-                await api.delete(`/goals/${id}`);
-              }
+              if (token) await api.delete(`/goals/${id}`);
               fetchGoals();
-            } catch (e) {
-              console.error("Error deleting goal:", e);
-            }
+              showNotification("Goal deleted", "info");
+            } catch (e) { console.error("Error deleting goal:", e); }
           }
         }
       ]
     );
   };
 
-  const resetForm = () => {
-    setTitle("");
-    setTargetAmount("");
-    setCurrentAmount("");
-    setSelectedIcon("vocation");
-    setSelectedColor("#60a5fa");
-  };
-
   return (
-    <SafeAreaView edges={['top']} className="flex-1" style={{ backgroundColor: theme.background }}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
-        <ScrollView className="flex-1 px-4 pt-4" showsVerticalScrollIndicator={false}>
-          <View className="flex-row justify-between items-center mb-6">
-            <Text className="text-3xl font-extrabold text-black dark:text-white">Savings Goals</Text>
+    <SafeAreaView edges={['top']} style={[styles.safeArea, { backgroundColor: theme.background }]}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
+        <ScrollView style={styles.flex1} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <View style={styles.header}>
+            <Text style={[styles.headerTitle, { color: theme.text }]}>Savings Goals</Text>
             <TouchableOpacity 
               onPress={() => setModalVisible(true)}
-              className="p-2 bg-cyan-800 rounded-full"
+              style={[styles.addBtn, { backgroundColor: theme.primaryBg, borderColor: theme.primary, borderWidth: 1 }]}
             >
-              <Ionicons name="add" size={24} color="white" />
+              <Ionicons name="add" size={24} color={theme.primary} />
             </TouchableOpacity>
           </View>
 
-          {goals.map((goal) => {
-            const progress = Math.min((goal.current_amount / goal.target_amount) * 100, 100);
-            return (
-              <View key={goal.id} className="bg-white dark:bg-gray-900 rounded-3xl p-5 mb-4 shadow-sm border border-gray-100 dark:border-gray-800">
-                <View className="flex-row items-center justify-between mb-4">
-                  <View className="flex-row items-center">
-                    <View 
-                      style={{ backgroundColor: `${goal.color}20`, padding: 10, borderRadius: 15, marginRight: 12 }}
-                    >
+          {loading && goals.length === 0 ? (
+             <View style={styles.loadingContainer}>
+               <ActivityIndicator size="large" color={theme.primary} />
+             </View>
+          ) : goals.length > 0 ? (
+            goals.map((goal) => {
+              const progress = Math.min((goal.current_amount / goal.target_amount) * 100, 100);
+              return (
+                <View key={goal.id} style={[styles.goalCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                  <View style={styles.goalHeader}>
+                    <View style={[styles.iconWrapper, { backgroundColor: goal.color + '20' }]}>
                       <Ionicons name={goal.icon as any} size={24} color={goal.color} />
                     </View>
-                    <View>
-                      <Text className="text-lg font-bold text-black dark:text-white">{goal.title}</Text>
-                      <Text className="text-gray-400 text-xs">Target: ₹{goal.target_amount.toFixed(0)}</Text>
+                    <View style={styles.goalInfo}>
+                      <Text style={[styles.goalTitle, { color: theme.text }]}>{goal.title}</Text>
+                      <Text style={[styles.goalAmount, { color: theme.gray }]}>
+                        ₹{goal.current_amount.toLocaleString()} / ₹{goal.target_amount.toLocaleString()}
+                      </Text>
                     </View>
+                    <TouchableOpacity onPress={() => deleteGoal(goal.id)} style={{ padding: 8 }}>
+                      <Ionicons name="trash-outline" size={20} color={theme.error} />
+                    </TouchableOpacity>
                   </View>
-                  <TouchableOpacity onPress={() => deleteGoal(goal.id)}>
-                      <Ionicons name="trash-outline" size={20} color={theme.gray} />
-                  </TouchableOpacity>
-                </View>
 
-                  <View className="mb-4">
-                    <View className="flex-row justify-between mb-1">
+                  <View style={{ marginBottom: 16 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
                       <View>
-                        <Text className="text-sm font-bold text-gray-600 dark:text-gray-300">₹{goal.current_amount.toLocaleString()} saved</Text>
+                        <Text style={{ fontSize: 14, fontWeight: 'bold', color: theme.text }}>₹{goal.current_amount.toLocaleString()} saved</Text>
                         {goal.current_amount < goal.target_amount ? (
-                            <Text className="text-[10px] text-gray-400">Remaining: ₹{(goal.target_amount - goal.current_amount).toLocaleString()}</Text>
+                            <Text style={{ fontSize: 10, color: theme.gray }}>Remaining: ₹{(goal.target_amount - goal.current_amount).toLocaleString()}</Text>
                         ) : (
-                            <View className="flex-row items-center">
-                                <Ionicons name="checkmark-circle" size={12} color="#10b981" />
-                                <Text className="text-[10px] text-green-500 font-bold ml-1">Goal Achieved!</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                                <Ionicons name="checkmark-circle" size={12} color={theme.success} />
+                                <Text style={{ fontSize: 10, color: theme.success, fontWeight: 'bold', marginLeft: 4 }}>Goal Achieved!</Text>
                             </View>
                         )}
                       </View>
-                      <Text className="text-sm font-bold text-gray-600 dark:text-gray-300">{progress.toFixed(0)}%</Text>
+                      <Text style={{ fontSize: 14, fontWeight: 'bold', color: theme.text }}>{progress.toFixed(0)}%</Text>
                     </View>
-                    <View className="h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                    <View style={{ height: 8, backgroundColor: theme.lightGray, borderRadius: 4, overflow: 'hidden' }}>
                         <View 
-                            className="h-full rounded-full" 
-                            style={{ width: `${progress}%`, backgroundColor: goal.current_amount >= goal.target_amount ? "#10b981" : goal.color }} 
+                            style={{ height: '100%', borderRadius: 4, width: `${progress}%`, backgroundColor: goal.current_amount >= goal.target_amount ? theme.success : goal.color }} 
                         />
                     </View>
                   </View>
 
-                  <View className="flex-row gap-2">
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
                       <TouchableOpacity 
-                        onPress={() => handleAdjustProgress(goal, "subtract")}
-                        className="w-12 h-12 bg-gray-100 dark:bg-gray-800 rounded-2xl items-center justify-center border border-gray-200 dark:border-gray-700"
+                        onPress={() => {
+                            setSelectedGoal(goal);
+                            setAdjustmentType("subtract");
+                            setAdjustModalVisible(true);
+                        }}
+                        style={{ width: 48, height: 48, backgroundColor: theme.lightGray, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme.border }}
                       >
                           <Ionicons name="remove" size={20} color={theme.gray} />
                       </TouchableOpacity>
                       
                       <TouchableOpacity 
-                        onPress={() => handleAdjustProgress(goal, "add")}
+                        onPress={() => {
+                            setSelectedGoal(goal);
+                            setAdjustmentType("add");
+                            setAdjustModalVisible(true);
+                        }}
                         disabled={goal.current_amount >= goal.target_amount}
-                        className={`flex-1 h-12 rounded-2xl items-center justify-center shadow-sm ${goal.current_amount >= goal.target_amount ? "bg-gray-300 dark:bg-gray-700" : "bg-cyan-800"}`}
+                        style={{ flex: 1, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowOpacity: 0.1, backgroundColor: goal.current_amount >= goal.target_amount ? theme.lightGray : theme.primary }}
                       >
-                          <View className="flex-row items-center">
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <Ionicons 
                                 name={goal.current_amount >= goal.target_amount ? "ribbon-outline" : "add"} 
                                 size={20} 
                                 color={goal.current_amount >= goal.target_amount ? theme.gray : "white"} 
-                                className="mr-1" 
+                                style={{ marginRight: 4 }} 
                             />
-                            <Text className={`font-bold text-sm ${goal.current_amount >= goal.target_amount ? "text-gray-500" : "text-white"}`}>
+                            <Text style={{ fontWeight: 'bold', fontSize: 14, color: goal.current_amount >= goal.target_amount ? theme.gray : "white" }}>
                                 {goal.current_amount >= goal.target_amount ? "Goal Achieved" : "Add Progress"}
                             </Text>
                           </View>
                       </TouchableOpacity>
                   </View>
-              </View>
-            );
-          })}
-
-          {goals.length === 0 && (
-             <View className="items-center mt-20">
-                 <Ionicons name="trophy-outline" size={80} color={theme.tabIconDefault} />
-                 <Text className="text-gray-400 mt-4 text-center">You haven't set any savings goals yet. Start small and save big!</Text>
-             </View>
+                </View>
+              );
+            })
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="medal-outline" size={64} color={theme.lightGray} />
+              <Text style={[styles.emptyText, { color: theme.gray }]}>No goals yet. Dream big!</Text>
+            </View>
           )}
         </ScrollView>
 
         {/* Add Goal Modal */}
-        <Modal visible={modalVisible} animationType="slide" transparent={true}>
-            <View className="flex-1 justify-end bg-black/50">
-                <View className="bg-white dark:bg-gray-900 rounded-t-3xl p-6 h-4/5 shadow-2xl">
-                    <View className="flex-row justify-between items-center mb-6">
-                        <Text className="text-2xl font-bold text-black dark:text-white">New Goal</Text>
-                        <TouchableOpacity onPress={() => setModalVisible(false)}>
-                            <Ionicons name="close" size={24} color={theme.text} />
-                        </TouchableOpacity>
-                    </View>
+        <Modal visible={modalVisible} transparent animationType="slide">
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: theme.card, borderColor: theme.border }]}>
+               <Text style={[styles.modalTitle, { color: theme.text }]}>New Savings Goal</Text>
+               <TextInput 
+                  placeholder="What is this goal for?" 
+                  placeholderTextColor={theme.gray}
+                  value={title}
+                  onChangeText={setTitle}
+                  style={[styles.input, { color: theme.text, backgroundColor: theme.lightGray, borderColor: theme.border }]}
+               />
+               <TextInput 
+                  placeholder="Target Amount (₹)" 
+                  keyboardType="numeric"
+                  placeholderTextColor={theme.gray}
+                  value={targetAmount}
+                  onChangeText={setTargetAmount}
+                  style={[styles.input, { color: theme.text, backgroundColor: theme.lightGray, borderColor: theme.border }]}
+               />
+               <TextInput 
+                  placeholder="Initial Amount (₹)" 
+                  keyboardType="numeric"
+                  placeholderTextColor={theme.gray}
+                  value={currentAmount}
+                  onChangeText={setCurrentAmount}
+                  style={[styles.input, { color: theme.text, backgroundColor: theme.lightGray, borderColor: theme.border }]}
+               />
+               
+               <Text style={[styles.label, { color: theme.gray }]}>Choose Icon & Color</Text>
+               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.iconScroll}>
+                  {GOAL_ICONS.map(i => (
+                    <TouchableOpacity 
+                      key={i} 
+                      onPress={() => setSelectedIcon(i)}
+                      style={[styles.iconPick, { borderColor: selectedIcon === i ? theme.primary : 'transparent' }]}
+                    >
+                      <Ionicons name={i as any} size={24} color={selectedIcon === i ? theme.primary : theme.gray} />
+                    </TouchableOpacity>
+                  ))}
+               </ScrollView>
 
-                    <ScrollView showsVerticalScrollIndicator={false}>
-                        <Text className="text-gray-400 font-bold text-[10px] mb-2 uppercase tracking-widest pl-1">Goal Title</Text>
-                        <TextInput 
-                          value={title}
-                          onChangeText={setTitle}
-                          placeholder="e.g., Vacation to Bali"
-                          placeholderTextColor={theme.gray}
-                          className="bg-gray-50 dark:bg-gray-800 p-4 rounded-2xl mb-4 text-black dark:text-white font-bold"
-                        />
+               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.colorScroll}>
+                  {GOAL_COLORS.map(c => (
+                    <TouchableOpacity 
+                      key={c} 
+                      onPress={() => setSelectedColor(c)}
+                      style={[styles.colorPick, { backgroundColor: c, borderWidth: selectedColor === c ? 3 : 0, borderColor: theme.text }]}
+                    />
+                  ))}
+               </ScrollView>
 
-                        <Text className="text-gray-400 font-bold text-[10px] mb-2 uppercase tracking-widest pl-1">Target Amount (₹)</Text>
-                        <TextInput 
-                          value={targetAmount}
-                          onChangeText={setTargetAmount}
-                          placeholder="0"
-                          keyboardType="numeric"
-                          placeholderTextColor={theme.gray}
-                          className="bg-gray-50 dark:bg-gray-800 p-4 rounded-2xl mb-4 text-black dark:text-white font-bold"
-                        />
-
-                        <Text className="text-gray-400 font-bold text-[10px] mb-2 uppercase tracking-widest pl-1">Initial Amount (₹)</Text>
-                        <TextInput 
-                          value={currentAmount}
-                          onChangeText={setCurrentAmount}
-                          placeholder="0"
-                          keyboardType="numeric"
-                          placeholderTextColor={theme.gray}
-                          className="bg-gray-50 dark:bg-gray-800 p-4 rounded-2xl mb-4 text-black dark:text-white font-bold"
-                        />
-
-                        <Text className="text-gray-400 font-bold text-[10px] mb-2 uppercase tracking-widest pl-1">Icon</Text>
-                        <View className="flex-row flex-wrap gap-3 mb-4">
-                            {GOAL_ICONS.map(icon => (
-                                <TouchableOpacity 
-                                  key={icon} 
-                                  onPress={() => setSelectedIcon(icon)}
-                                  className={`p-3 rounded-2xl ${selectedIcon === icon ? "bg-cyan-800" : "bg-gray-100 dark:bg-gray-800"}`}
-                                >
-                                    <Ionicons name={icon as any} size={24} color={selectedIcon === icon ? "white" : theme.gray} />
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-
-                        <Text className="text-gray-400 font-bold text-[10px] mb-2 uppercase tracking-widest pl-1">Color</Text>
-                        <View className="flex-row flex-wrap gap-3 mb-8">
-                            {GOAL_COLORS.map(color => (
-                                <TouchableOpacity 
-                                  key={color} 
-                                  onPress={() => setSelectedColor(color)}
-                                  style={{ backgroundColor: color, width: 44, height: 44, borderRadius: 22, borderWidth: 3, borderColor: selectedColor === color ? "white" : "transparent" }}
-                                />
-                            ))}
-                        </View>
-
-                        <TouchableOpacity 
-                          onPress={saveGoal}
-                          className="bg-cyan-800 p-5 rounded-2xl items-center shadow-lg shadow-cyan-900/30 mb-10"
-                        >
-                            <Text className="text-white font-bold text-lg">Create Goal</Text>
-                        </TouchableOpacity>
-                    </ScrollView>
-                </View>
+               <View style={styles.modalActions}>
+                  <TouchableOpacity onPress={() => setModalVisible(false)} style={[styles.modalBtn, { backgroundColor: theme.lightGray }]}>
+                     <Text style={{ color: theme.gray, fontWeight: 'bold' }}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={saveGoal} style={[styles.modalBtn, { backgroundColor: theme.primary }]}>
+                     <Text style={{ color: '#fff', fontWeight: 'bold' }}>Create Goal</Text>
+                  </TouchableOpacity>
+               </View>
             </View>
+          </View>
         </Modal>
 
-        {/* Progress Adjustment Modal */}
-        <Modal 
-            visible={adjustModalVisible} 
-            animationType="fade" 
-            transparent={true}
-            onRequestClose={() => setAdjustModalVisible(false)}
-        >
-            <View className="flex-1 justify-center items-center bg-black/60 px-6">
-                <View className="bg-white dark:bg-gray-900 rounded-3xl p-6 w-full shadow-2xl">
-                    <Text className="text-xl font-bold text-center mb-2 text-black dark:text-white">
-                        {adjustmentType === "add" ? "Add to Savings" : "Remove from Savings"}
-                    </Text>
-                    <Text className="text-gray-400 text-center text-sm mb-6">
-                        Goal: {selectedGoal?.title}
-                    </Text>
-
-                    <TextInput 
-                        autoFocus
-                        value={adjustmentAmount}
-                        onChangeText={setAdjustmentAmount}
-                        placeholder="Enter amount (₹)"
-                        keyboardType="numeric"
-                        placeholderTextColor={theme.gray}
-                        className="bg-gray-100 dark:bg-gray-800 p-5 rounded-2xl mb-6 text-center text-2xl font-bold text-black dark:text-white"
-                    />
-
-                    <View className="flex-row gap-3">
-                        <TouchableOpacity 
-                            onPress={() => setAdjustModalVisible(false)}
-                            className="flex-1 p-4 bg-gray-100 dark:bg-gray-800 rounded-2xl items-center"
-                        >
-                            <Text className="font-bold text-gray-500">Cancel</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity 
-                            onPress={submitAdjustment}
-                            disabled={loading}
-                            className={`flex-1 p-4 rounded-2xl items-center ${adjustmentType === "add" ? "bg-green-600" : "bg-red-600"}`}
-                        >
-                            {loading ? (
-                                <ActivityIndicator color="white" />
-                            ) : (
-                                <Text className="font-bold text-white">
-                                    {adjustmentType === "add" ? "Add" : "Remove"}
-                                </Text>
-                            )}
-                        </TouchableOpacity>
-                    </View>
+        {/* Adjust Progress Modal */}
+        <Modal visible={adjustModalVisible} transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+             <View style={[styles.modalContent, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <Text style={[styles.modalTitle, { color: theme.text }]}>
+                   {adjustmentType === "add" ? "Add to Savings" : "Withdraw from Goal"}
+                </Text>
+                <Text style={[styles.label, { color: theme.gray, textAlign: 'center', marginBottom: 16 }]}>
+                   {selectedGoal?.title}
+                </Text>
+                <TextInput 
+                   placeholder="Amount (₹)"
+                   keyboardType="numeric"
+                   autoFocus
+                   placeholderTextColor={theme.gray}
+                   value={adjustmentAmount}
+                   onChangeText={setAdjustmentAmount}
+                   style={[styles.input, { color: theme.text, backgroundColor: theme.lightGray, height: 60, fontSize: 24, textAlign: 'center' }]}
+                />
+                <View style={[styles.modalActions, { marginTop: 20 }]}>
+                   <TouchableOpacity onPress={() => setAdjustModalVisible(false)} style={[styles.modalBtn, { backgroundColor: theme.lightGray }]}>
+                      <Text style={{ color: theme.gray, fontWeight: 'bold' }}>Cancel</Text>
+                   </TouchableOpacity>
+                   <TouchableOpacity onPress={submitAdjustment} style={[styles.modalBtn, { backgroundColor: adjustmentType === 'add' ? theme.success : theme.error }]}>
+                      <Text style={{ color: '#fff', fontWeight: 'bold' }}>Confirm</Text>
+                   </TouchableOpacity>
                 </View>
-            </View>
+             </View>
+          </View>
         </Modal>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safeArea: { flex: 1 },
+  flex1: { flex: 1 },
+  scrollContent: { padding: 16 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, marginTop: 8 },
+  headerTitle: { fontSize: 30, fontWeight: '800' },
+  addBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', elevation: 4 },
+  loadingContainer: { minHeight: 300, justifyContent: 'center' },
+  goalCard: { padding: 20, borderRadius: 28, borderWidth: 1, marginBottom: 20, elevation: 2 },
+  goalHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  iconWrapper: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+  goalInfo: { flex: 1 },
+  goalTitle: { fontSize: 18, fontWeight: 'bold' },
+  goalAmount: { fontSize: 13, marginTop: 2 },
+  progressBase: { height: 12, borderRadius: 6, overflow: 'hidden', marginBottom: 12 },
+  progressFill: { height: '100%', borderRadius: 6 },
+  goalActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  progressPct: { fontSize: 12, fontWeight: 'bold' },
+  actionRow: { flexDirection: 'row', gap: 10 },
+  miniActionBtn: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 80 },
+  emptyText: { marginTop: 16, fontSize: 16, fontWeight: '500' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 20 },
+  modalContent: { borderRadius: 32, padding: 24, borderWidth: 1 },
+  modalTitle: { fontSize: 22, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
+  input: { height: 50, borderRadius: 16, paddingHorizontal: 16, marginBottom: 16, fontSize: 16, borderWidth: 1 },
+  label: { fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 12 },
+  iconScroll: { marginBottom: 16 },
+  iconPick: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginRight: 12, borderWidth: 2 },
+  colorScroll: { marginBottom: 24 },
+  colorPick: { width: 36, height: 36, borderRadius: 18, marginRight: 12 },
+  modalActions: { flexDirection: 'row', gap: 12 },
+  modalBtn: { flex: 1, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+});

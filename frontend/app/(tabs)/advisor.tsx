@@ -27,7 +27,8 @@ import AnimatedRN, {
   withDelay,
   Easing
 } from "react-native-reanimated";
-import { Colors } from "../../constants/colors";
+import { useTheme } from "../../context/ThemeContext";
+import { useAuth } from "../../context/AuthContext";
 import {
   ChatMessage,
   FinancialSummary,
@@ -154,16 +155,16 @@ const TypingIndicator = () => (
 );
 
 export default function AdvisorScreen() {
-  const { colorScheme } = useColorScheme();
-  const theme = Colors[colorScheme ?? "light"];
-  const isDark = colorScheme === "dark";
+  const { theme } = useTheme();
+  const { token, user } = useAuth();
+  const isDark = theme.background === "#000000" || theme.background === "#020617" || theme.background === "#0F0F17";
 
   const [summary, setSummary] = useState<FinancialSummary | null>(null);
   const [insights, setInsights] = useState<Insight[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: "welcome",
-      text: "👋 Hi! I'm your **AI Financial Advisor**. I analyzed your spending patterns and I'm ready to help you save! Ask me anything about your expenses.",
+      text: `👋 Hi ${user?.name?.split(' ')[0] || ''}! I'm your **AI Financial Advisor**. I analyzed your spending patterns and I'm ready to help you save! Ask me anything about your expenses.`,
       sender: "advisor",
       timestamp: new Date(),
     },
@@ -172,14 +173,15 @@ export default function AdvisorScreen() {
   const [isTyping, setIsTyping] = useState(false);
   const [loading, setLoading] = useState(true);
   const scrollRef = useRef<ScrollView>(null);
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   const loadData = async () => {
     try {
       setLoading(true);
       const [summaryData, insightData] = await Promise.all([
-        getFinancialSummary(),
-        generateInsights(),
+        getFinancialSummary(token),
+        generateInsights(token),
       ]);
       setSummary(summaryData);
       setInsights(insightData);
@@ -233,7 +235,7 @@ export default function AdvisorScreen() {
     }, 100);
 
     try {
-      const response = await handleQuery(text, [...messages, userMsg]);
+      const response = await handleQuery(text, [...messages, userMsg], token);
       const advisorMsg: ChatMessage = {
         id: `advisor-${Date.now()}`,
         text: response,
@@ -267,10 +269,10 @@ export default function AdvisorScreen() {
         className="flex-1 justify-center items-center"
         style={{ backgroundColor: theme.background }}
       >
-        <ActivityIndicator size="large" color={theme.primary} />
+        <ActivityIndicator size="large" color={theme.text} />
         <Text
           className="mt-4 font-bold"
-          style={{ color: theme.primary }}
+          style={{ color: theme.text }}
         >
           Analyzing your finances...
         </Text>
@@ -279,6 +281,7 @@ export default function AdvisorScreen() {
   }
 
   return (
+    <ScrollView>
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: theme.background }}>
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "padding"}
@@ -297,7 +300,7 @@ export default function AdvisorScreen() {
                   width: 40,
                   height: 40,
                   borderRadius: 14,
-                  backgroundColor: isDark ? "#164e63" : "#ecfeff",
+                  backgroundColor: theme.primaryBg,
                   alignItems: "center",
                   justifyContent: "center",
                   marginRight: 12,
@@ -306,7 +309,7 @@ export default function AdvisorScreen() {
                 <Text style={{ fontSize: 20 }}>🤖</Text>
               </View>
               <View>
-                <Text className="text-xl font-extrabold text-black dark:text-white">
+                <Text className="text-xl font-extrabold" style={{ color: theme.text }}>
                   Financial Advisor
                 </Text>
               </View>
@@ -319,7 +322,7 @@ export default function AdvisorScreen() {
               style={{
                 padding: 8,
                 borderRadius: 12,
-                backgroundColor: isDark ? "#1f2937" : "#f3f4f6",
+                backgroundColor: theme.card,
               }}
             >
               <Ionicons
@@ -346,14 +349,16 @@ export default function AdvisorScreen() {
             <View className="mb-4">
               <View
                 style={{
-                  backgroundColor: isDark ? "#164e63" : "#155e75",
+                  backgroundColor: theme.card,
                   borderRadius: 20,
                   padding: 16,
+                  borderWidth: 1,
+                  borderColor: theme.border
                 }}
               >
                 <Text
                   style={{
-                    color: "#a5f3fc",
+                    color: theme.primary,
                     fontSize: 10,
                     fontWeight: "800",
                     letterSpacing: 1.5,
@@ -381,7 +386,7 @@ export default function AdvisorScreen() {
                         fontWeight: "800",
                       }}
                     >
-                      +₹{summary.totalIncome.toFixed(0)}
+                      + ₹{summary.totalIncome.toFixed(0)}
                     </Text>
                   </View>
                   <View className="items-center">
@@ -403,7 +408,7 @@ export default function AdvisorScreen() {
                         fontWeight: "900",
                       }}
                     >
-                      {summary.netBalance >= 0 ? "+" : ""}₹
+                      {summary.netBalance >= 0 ? "+ " : ""}₹
                       {summary.netBalance.toFixed(0)}
                     </Text>
                   </View>
@@ -424,7 +429,7 @@ export default function AdvisorScreen() {
                         fontWeight: "800",
                       }}
                     >
-                      -₹{summary.totalExpenses.toFixed(0)}
+                      - ₹{summary.totalExpenses.toFixed(0)}
                     </Text>
                   </View>
                 </View>
@@ -433,18 +438,18 @@ export default function AdvisorScreen() {
                     <View className="flex-row justify-between mb-1">
                       <Text
                         style={{
-                          color: "#a5f3fc",
-                          fontSize: 10,
-                          fontWeight: "700",
+                          color: theme.text,
+                          fontSize: 12,
+                          fontWeight: "200",
                         }}
                       >
-                        Budget
+                        Budget - <Text style={{ fontWeight: "bold" }}>₹{summary.budgetLimit.toFixed(0)}</Text>
                       </Text>
                       <Text
                         style={{
-                          color: "#a5f3fc",
-                          fontSize: 10,
-                          fontWeight: "700",
+                          color: theme.text,
+                          fontSize: 12,
+                          fontWeight: "200",
                         }}
                       >
                         {Math.min(summary.budgetUsedPercent, 100).toFixed(0)}
@@ -560,9 +565,7 @@ export default function AdvisorScreen() {
                         height: 14,
                         backgroundColor: isUser
                           ? theme.primary
-                          : isDark
-                            ? "#1f2937"
-                            : "#f3f4f6",
+                          : theme.card,
                         transform: [{ rotate: "45deg" }],
                         zIndex: -1,
                       }}
@@ -573,9 +576,7 @@ export default function AdvisorScreen() {
                         maxWidth: "85%",
                         backgroundColor: isUser
                           ? theme.primary
-                          : isDark
-                            ? "#1f2937"
-                            : "#f3f4f6",
+                          : theme.card,
                         borderRadius: 20,
                         borderBottomRightRadius: isUser ? 4 : 20,
                         borderBottomLeftRadius: isUser ? 20 : 4,
@@ -627,14 +628,14 @@ export default function AdvisorScreen() {
                         left: -6,
                         width: 14,
                         height: 14,
-                        backgroundColor: isDark ? "#1f2937" : "#f3f4f6",
+                        backgroundColor: theme.card,
                         transform: [{ rotate: "45deg" }],
                         zIndex: -1,
                       }}
                     />
                   <View
                     style={{
-                      backgroundColor: isDark ? "#1f2937" : "#f3f4f6",
+                      backgroundColor: theme.card,
                       borderRadius: 20,
                       borderBottomLeftRadius: 4,
                       paddingHorizontal: 20,
@@ -671,9 +672,9 @@ export default function AdvisorScreen() {
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
-                  backgroundColor: isDark ? "#1f2937" : "#f0f9ff",
+                  backgroundColor: theme.card,
                   borderWidth: 1,
-                  borderColor: isDark ? "#374151" : "#bae6fd",
+                  borderColor: theme.border,
                   borderRadius: 20,
                   paddingHorizontal: 14,
                   paddingVertical: 8,
@@ -702,19 +703,19 @@ export default function AdvisorScreen() {
           className="px-4 pt-2 pb-6"
           style={{
             borderTopWidth: 1,
-            borderTopColor: isDark ? "#1f2937" : "#f3f4f6",
+            borderTopColor: theme.border,
           }}
         >
           <View
             style={{
               flexDirection: "row",
               alignItems: "center",
-              backgroundColor: isDark ? "#1f2937" : "#f3f4f6",
+              backgroundColor: theme.card,
               borderRadius: 24,
               paddingHorizontal: 16,
               paddingVertical: Platform.OS === "ios" ? 10 : 2,
               borderWidth: 1,
-              borderColor: isDark ? "#374151" : "#e5e7eb",
+              borderColor: theme.border,
             }}
           >
             <Ionicons
@@ -727,8 +728,9 @@ export default function AdvisorScreen() {
               onChangeText={setInputText}
               placeholder="Ask me about your finances..."
               placeholderTextColor={theme.gray}
-              className="flex-1 mx-3 text-black dark:text-white"
+              className="flex-1 mx-3"
               style={{
+                color: theme.text,
                 fontSize: 15,
                 paddingVertical: Platform.OS === "ios" ? 4 : 10,
               }}
@@ -765,5 +767,6 @@ export default function AdvisorScreen() {
       </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
     </SafeAreaView>
+    </ScrollView>
   );
 }

@@ -1,7 +1,6 @@
 import { View, Text, TouchableOpacity } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { useColorScheme } from "nativewind";
-import { Colors } from "../constants/colors";
+import { useTheme } from "../context/ThemeContext";
 import { CATEGORIES, INCOME_CATEGORIES } from "../constants/categories";
 
 export interface Expense {
@@ -24,12 +23,11 @@ interface Props {
   item: Expense;
   onEdit: (item: Expense) => void;
   onDelete: (id: string | number) => void;
-  onPress: (item: Expense) => void;
+  onPress?: (item: Expense) => void;
 }
 
 export default function ExpenseItem({ item, onEdit, onDelete, onPress }: Props) {
-  const { colorScheme } = useColorScheme();
-  const theme = Colors[colorScheme ?? 'light'];
+  const { theme } = useTheme();
   const isIncome = item.type === 'income';
   const knownCategory = isIncome 
     ? INCOME_CATEGORIES.find(c => c.id === item.category) 
@@ -40,9 +38,10 @@ export default function ExpenseItem({ item, onEdit, onDelete, onPress }: Props) 
 
   return (
     <TouchableOpacity 
-      onPress={() => onPress(item)}
+      onPress={() => onPress?.(item)}
       activeOpacity={0.7}
-      className="flex-row items-center justify-between bg-white dark:bg-gray-900 p-4 rounded-2xl mb-3 shadow-sm border border-gray-100 dark:border-gray-800"
+      className="flex-row items-center justify-between p-4 rounded-2xl mb-3 shadow-sm border"
+      style={{ backgroundColor: theme.card, borderColor: theme.border }}
     >
       <View className="flex-row items-center flex-1">
         <View 
@@ -52,7 +51,7 @@ export default function ExpenseItem({ item, onEdit, onDelete, onPress }: Props) 
           <Ionicons name={categoryIcon as any} size={24} color={categoryColor} />
         </View>
         <View className="flex-1">
-          <Text className="text-lg font-bold text-black dark:text-white" numberOfLines={1}>
+          <Text className="text-lg font-bold" style={{ color: theme.text }} numberOfLines={1}>
             {item.title}
           </Text>
           <View className="flex-row items-center overflow-hidden">
@@ -65,15 +64,15 @@ export default function ExpenseItem({ item, onEdit, onDelete, onPress }: Props) 
                 {categoryName}
               </Text>
             )}
-            <Text className="text-gray-500 dark:text-gray-400 text-xs flex-shrink-0">
+            <Text className="text-xs flex-shrink-0" style={{ color: theme.gray }}>
               {new Date(item.created_at).toLocaleDateString()}
             </Text>
           </View>
           {item.tags ? (
             <View className="flex-row flex-wrap mt-1">
               {item.tags.split(',').map((tag, i) => (
-                <View key={i} className="bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-md mr-1 mb-1 border border-gray-200 dark:border-gray-700">
-                  <Text className="text-[9px] text-gray-500 dark:text-gray-400">#{tag.trim()}</Text>
+                <View key={i} className="px-2 py-0.5 rounded-md mr-1 mb-1 border" style={{ backgroundColor: theme.border, borderColor: theme.border }}>
+                  <Text className="text-[9px]" style={{ color: theme.gray }}>#{tag.trim()}</Text>
                 </View>
               ))}
             </View>
@@ -83,7 +82,8 @@ export default function ExpenseItem({ item, onEdit, onDelete, onPress }: Props) 
 
       <View className="flex-row items-center ml-2">
         <Text 
-           className={`text-lg font-bold mr-3 flex-shrink-0 ${isIncome ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
+           className="text-lg font-bold mr-3 flex-shrink-0"
+           style={{ color: isIncome ? theme.success : theme.error }}
            numberOfLines={1}
         >
           {isIncome ? '+ ' : '- '}₹ {item.amount.toFixed(2)}
@@ -92,15 +92,17 @@ export default function ExpenseItem({ item, onEdit, onDelete, onPress }: Props) 
         <View className="flex-row gap-2">
           <TouchableOpacity 
             onPress={() => onEdit(item)}
-            className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full"
+            className="p-2 rounded-full"
+            style={{ backgroundColor: theme.lightGray }}
           >
-            <Ionicons name="pencil" size={18} color={Colors[colorScheme ?? 'light'].icon} />
+            <Ionicons name="pencil" size={18} color={theme.gray} />
           </TouchableOpacity>
           <TouchableOpacity 
             onPress={() => onDelete(item.id)}
-            className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full"
+            className="p-2 rounded-full"
+            style={{ backgroundColor: theme.error + '20' }}
           >
-            <Ionicons name="trash" size={18} color={Colors[colorScheme ?? 'light'].error} />
+            <Ionicons name="trash" size={18} color={theme.error} />
           </TouchableOpacity>
         </View>
       </View>

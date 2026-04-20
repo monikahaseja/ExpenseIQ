@@ -1,20 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert, TextInput, Modal, ActivityIndicator, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from "../../context/AuthContext";
+import { useTheme } from "../../context/ThemeContext";
 import { Colors } from "../../constants/colors";
-import { useColorScheme } from "nativewind";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
 import api from '../../utils/api';
 import { API_URL } from '../../constants/api';
+import { useFocusEffect } from 'expo-router';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { user, logout, updateProfile } = useAuth();
-  const { colorScheme } = useColorScheme();
-  const theme = Colors[colorScheme ?? 'light'];
+  const { user, logout, updateProfile, refreshProfile } = useAuth();
+  const { theme, themeName } = useTheme();
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshProfile();
+    }, [])
+  );
+  const isDark = theme.background === "#000000" || theme.background === "#020617" || theme.background === "#0F0F17";
 
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(user?.name || '');
@@ -22,6 +29,8 @@ export default function ProfileScreen() {
   const [phoneNumber, setPhoneNumber] = useState(user?.phoneNumber || '');
   const [profilePhoto, setProfilePhoto] = useState(user?.profilePhoto || '');
   const [loading, setLoading] = useState(false);
+  const [previewModalVisible, setPreviewModalVisible] = useState(false);
+
 
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -60,8 +69,8 @@ export default function ProfileScreen() {
   };
 
   const pickImage = async () => {
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.5,
@@ -102,14 +111,20 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: theme.background }}>
     <ScrollView style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={styles.header}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 15 }}>
-            <Ionicons name="arrow-back" size={28} color={theme.text} />
-          </TouchableOpacity>
-          <Text style={[styles.title, { color: theme.text }]}>Profile</Text>
-        </View>
-        <TouchableOpacity onPress={() => isEditing ? handleUpdateProfile() : setIsEditing(true)}>
+      <View style={styles.headerRow}>
+        <TouchableOpacity 
+          onPress={() => router.back()} 
+          style={[styles.backBtn, { backgroundColor: theme.card, borderColor: theme.border }]}
+        >
+          <Ionicons name="arrow-back" size={22} color={theme.text} />
+        </TouchableOpacity>
+        
+        <Text style={[styles.headerTitle, { color: theme.text }]}>Profile</Text>
+        
+        <TouchableOpacity 
+          onPress={() => isEditing ? handleUpdateProfile() : setIsEditing(true)}
+          style={[styles.backBtn, { backgroundColor: theme.card, borderColor: theme.border, width: 'auto', minWidth: 44, paddingHorizontal: 12 }]}
+        >
           <Text style={[styles.editButton, { color: theme.primary }]}>
             {isEditing ? (loading ? 'Saving...' : 'Save') : 'Edit'}
           </Text>
@@ -119,8 +134,8 @@ export default function ProfileScreen() {
       <View style={[styles.profileCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
         <View style={{ position: 'relative', alignSelf: 'center' }}>
           <TouchableOpacity 
-            onPress={isEditing ? pickImage : undefined}
-            style={[styles.avatar, { backgroundColor: theme.primary, overflow: 'hidden' }]}
+            onPress={() => setPreviewModalVisible(true)}
+            style={[styles.avatar, { backgroundColor: theme.primary, overflow: 'hidden', borderWidth: 4, borderColor: theme.border }]}
           >
             {profilePhoto ? (
               <Image source={{ uri: profilePhoto }} style={{ width: '100%', height: '100%' }} />
@@ -128,28 +143,30 @@ export default function ProfileScreen() {
               <Text style={styles.avatarText}>{user?.name?.[0]?.toUpperCase()}</Text>
             )}
           </TouchableOpacity>
-          {isEditing && (
-            <TouchableOpacity 
-              onPress={pickImage}
-              style={{
-                position: 'absolute',
-                bottom: 6,
-                right: 0,
-                backgroundColor: theme.card,
-                borderRadius: 18,
-                padding: 4,
-                borderWidth: 2,
-                borderColor: theme.border,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.1,
-                shadowRadius: 3,
-                elevation: 2,
-              }}
-            >
-              <Ionicons name="camera" size={14} color={theme.primary} />
-            </TouchableOpacity>
-          )}
+          
+          <TouchableOpacity 
+            onPress={pickImage}
+            style={{
+              position: 'absolute',
+              bottom: 10,
+              right: 0,
+              backgroundColor: theme.primary,
+              borderRadius: 20,
+              width: 30,
+              height: 30,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderWidth: 3,
+              borderColor: theme.card,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.2,
+              shadowRadius: 4,
+              elevation: 4,
+            }}
+          >
+            <Ionicons name="camera" size={16} color="white" />
+          </TouchableOpacity>
         </View>
         
         {isEditing ? (
@@ -193,39 +210,14 @@ export default function ProfileScreen() {
         )}
       </View>
 
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: theme.tabIconDefault }]}>ACCOUNT</Text>
-        <TouchableOpacity 
-          style={[styles.menuItem, { borderBottomColor: theme.border }]}
-          onPress={() => setPasswordModalVisible(true)}
-        >
-          <Ionicons name="lock-closed-outline" size={22} color={theme.primary} />
-          <Text style={[styles.menuText, { color: theme.text }]}>Change Password</Text>
-          <Ionicons name="chevron-forward" size={20} color={theme.tabIconDefault} />
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.menuItem, { borderBottomColor: theme.border }]}>
-          <Ionicons name="shield-checkmark-outline" size={22} color={theme.primary} />
-          <Text style={[styles.menuText, { color: theme.text }]}>Privacy & Security</Text>
-          <Ionicons name="chevron-forward" size={20} color={theme.tabIconDefault} />
-        </TouchableOpacity>
+      {/* Member Since Info */}
+      <View style={[styles.section, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1, borderRadius: 20, padding: 20 }]}>
+        <View style={styles.menuItem}>
+          <Ionicons name="calendar-outline" size={22} color={theme.primary} />
+          <Text style={[styles.menuText, { color: theme.text }]}>Member Since</Text>
+          <Text style={{ color: theme.gray, fontSize: 14 }}>{user?.createdAt ? new Date(user.createdAt).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }) : 'N/A'}</Text>
+        </View>
       </View>
-
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: theme.tabIconDefault }]}>SUPPORT</Text>
-        <TouchableOpacity style={[styles.menuItem, { borderBottomColor: theme.border }]}>
-          <Ionicons name="help-circle-outline" size={22} color={theme.primary} />
-          <Text style={[styles.menuText, { color: theme.text }]}>Help Center</Text>
-          <Ionicons name="chevron-forward" size={20} color={theme.tabIconDefault} />
-        </TouchableOpacity>
-      </View>
-
-      <TouchableOpacity 
-        style={[styles.logoutButton, { borderColor: theme.error }]} 
-        onPress={handleLogout}
-      >
-        <Ionicons name="log-out-outline" size={22} color={theme.error} />
-        <Text style={[styles.logoutText, { color: theme.error }]}>Log Out</Text>
-      </TouchableOpacity>
 
       {/* Change Password Modal */}
       <Modal
@@ -281,16 +273,43 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
+      {/* Photo Preview Modal */}
+      <Modal
+        visible={previewModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setPreviewModalVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' }}>
+          <TouchableOpacity 
+            style={{ position: 'absolute', top: 10, right: 10, zIndex: 1, padding: 10 }}
+            onPress={() => setPreviewModalVisible(false)}
+          >
+            <Ionicons name="close" size={20} color="white" />
+          </TouchableOpacity>
+          
+          <View style={{ width: '90%', aspectRatio: 1, backgroundColor: theme.card, borderRadius: 20, overflow: 'hidden', borderWidth: 2, borderColor: theme.border }}>
+            {profilePhoto ? (
+              <Image source={{ uri: profilePhoto }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+            ) : (
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.primary }}>
+                 <Text style={{ fontSize: 100, fontWeight: 'bold', color: 'white' }}>{user?.name?.[0]?.toUpperCase()}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
-  header: { marginTop: 10, marginBottom: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  title: { fontSize: 32, fontWeight: 'bold' },
-  editButton: { fontSize: 18, fontWeight: '600' },
+  container: { flex: 1, padding: 16 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, marginTop: 8 },
+  backBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  headerTitle: { fontSize: 22, fontWeight: '800' },
+  editButton: { fontSize: 13, fontWeight: 'bold' },
   profileCard: { 
     padding: 30, 
     borderRadius: 24, 
@@ -328,9 +347,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 12, fontWeight: 'bold', marginBottom: 15, letterSpacing: 1 },
   menuItem: { 
     flexDirection: 'row', 
-    alignItems: 'center', 
-    paddingVertical: 15, 
-    borderBottomWidth: 1 
+    alignItems: 'center',
   },
   menuText: { flex: 1, fontSize: 16, marginLeft: 15 },
   logoutButton: { 

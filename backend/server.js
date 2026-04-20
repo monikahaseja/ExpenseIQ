@@ -31,6 +31,7 @@ app.use('/api/goals', require('./routes/goals'));
 app.use('/api/budgets', require('./routes/budgets'));
 app.use('/api/appnames', require('./routes/appnames'));
 app.use('/api/analytics', require('./routes/analytics'));
+app.use('/api/ratings', require('./routes/ratings'));
 
 // Health check
 app.get('/health', (req, res) => res.send('API is running...'));

@@ -1,23 +1,21 @@
 import React, { useState, useCallback, useMemo } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Alert, RefreshControl, FlatList, KeyboardAvoidingView, Platform, TextInput, Modal } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Alert, RefreshControl, FlatList, KeyboardAvoidingView, Platform, TextInput, Modal, StyleSheet, ActivityIndicator, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import { useColorScheme } from "nativewind";
 import { Colors } from "../../constants/colors";
-import { db, getSetting, getUnreadCount } from "../../db/database";
+import { db, getUnreadCount } from "../../db/database";
 import ExpenseItem, { Expense } from "../../components/ExpenseItem";
 import { useNotification } from "../../components/NotificationContext";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { CATEGORIES, INCOME_CATEGORIES } from "../../constants/categories";
 import { useAuth } from "../../context/AuthContext";
+import { useTheme } from "../../context/ThemeContext";
 import api from "../../utils/api";
-import { API_URL } from "../../constants/api";
 
 export default function HomeScreen() {
   const { user, token, isLoading: authLoading } = useAuth();
-  const { colorScheme } = useColorScheme();
-  const theme = Colors[colorScheme ?? "light"];
+  const { theme } = useTheme();
   const router = useRouter();
   const { showNotification } = useNotification();
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -28,6 +26,7 @@ export default function HomeScreen() {
   const [appTitle, setAppTitle] = useState("💰ExpenseIQ");
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const fetchExpenses = async () => {
     if (authLoading) return;
@@ -62,7 +61,7 @@ export default function HomeScreen() {
       
       setExpenses(rows);
 
-      // Simple Recurring Suggestion logic
+      // Recursive Logic (Suggested from last month)
       const lastMonth = new Date(currentDate);
       lastMonth.setMonth(lastMonth.getMonth() - 1);
       const lastMonthStr = `${lastMonth.getFullYear()}-${(lastMonth.getMonth() + 1).toString().padStart(2, "0")}`;
@@ -120,8 +119,14 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       fetchExpenses();
-    }, [currentDate]),
+    }, [currentDate, token]),
   );
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchExpenses().finally(() => setRefreshing(refreshing));
+    setTimeout(() => setRefreshing(false), 1000);
+  }, [currentDate, token]);
 
   const changeMonth = (direction: number) => {
     const newDate = new Date(currentDate);
@@ -182,136 +187,202 @@ export default function HomeScreen() {
   });
 
   return (
-    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: theme.background }}>
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      className="flex-1 bg-white dark:bg-black"
-    >
-      <View className="flex-1 p-4">
-        <View className="flex-row justify-between items-center mb-4 mt-2">
-          <Text className="text-2xl font-bold text-black dark:text-white">
-            {appTitle}
-          </Text>
-          <TouchableOpacity
-            onPress={() => router.push("/notifications")}
-            style={{ position: "relative", padding: 8 }}
-          >
-            <Ionicons name="notifications-outline" size={26} color={theme.text} />
-            {unreadCount > 0 && (
-              <View
-                style={{
-                  position: "absolute",
-                  top: 6,
-                  right: 6,
-                  width: 10,
-                  height: 10,
-                  borderRadius: 5,
-                  backgroundColor: "#ef4444",
-                  borderWidth: 2,
-                  borderColor: colorScheme === "dark" ? "#000" : "#fff",
-                }}
+    <SafeAreaView edges={['top']} style={[styles.safeArea, { backgroundColor: theme.background }]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.flex1}
+      >
+        <View style={styles.flex1}>
+          {/* Header */}
+          <View style={styles.header}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <TouchableOpacity
+                onPress={() => router.push("/profile" as any)}
+                style={[styles.headerAvatar, { backgroundColor: theme.primaryBg, borderColor: theme.primary, borderWidth: 1 }]}
+              >
+                {user?.profilePhoto ? (
+                  <Image source={{ uri: user.profilePhoto }} style={styles.avatarImg} />
+                ) : (
+                  <Text style={[styles.avatarInitial, { color: theme.primary }]}>
+                    {user?.name?.[0]?.toUpperCase() || 'U'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+              <Text style={[styles.headerTitle, { color: theme.text }]}>
+                {appTitle}
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => router.push("/notifications")}
+              style={styles.notificationBtn}
+            >
+              <Ionicons name="notifications-outline" size={26} color={theme.text} />
+              {unreadCount > 0 && (
+                <View style={[styles.unreadBadge, { backgroundColor: theme.error }]}>
+                  <Text style={styles.unreadText}>{unreadCount > 9 ? "9+" : unreadCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* Balance Card */}
+          <View style={[styles.balanceCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <View style={styles.balanceHeader}>
+              <Text style={[styles.balanceLabel, { color: theme.gray }]}>NET BALANCE</Text>
+              <TouchableOpacity 
+                onPress={() => setShowPicker(true)}
+                style={styles.datePickerBtn}
+              >
+                <Text style={[styles.monthLabel, { color: theme.primary }]}>{formattedMonth}</Text>
+                <Ionicons name="chevron-down" size={14} color={theme.primary} />
+              </TouchableOpacity>
+            </View>
+            <Text style={[styles.balanceVal, { color: theme.text }]}>₹{balance.toLocaleString()}</Text>
+            
+            <View style={styles.statsRow}>
+              <View style={styles.statItem}>
+                <View style={[styles.statIcon, { backgroundColor: theme.success + '20' }]}>
+                  <Ionicons name="arrow-down" size={16} color={theme.success} />
+                </View>
+                <View>
+                  <Text style={[styles.statLabel, { color: theme.gray }]}>Income</Text>
+                  <Text style={[styles.incomeVal, { color: theme.success }]}>₹{totalIncome.toLocaleString()}</Text>
+                </View>
+              </View>
+              <View style={[styles.vDivider, { backgroundColor: theme.border }]} />
+              <View style={styles.statItem}>
+                <View style={[styles.statIcon, { backgroundColor: theme.error + '20' }]}>
+                  <Ionicons name="arrow-up" size={16} color={theme.error} />
+                </View>
+                <View>
+                  <Text style={[styles.statLabel, { color: theme.gray }]}>Expenses</Text>
+                  <Text style={[styles.expenseVal, { color: theme.error }]}>₹{totalExpenses.toLocaleString()}</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          {/* Search & Actions */}
+          <View style={styles.searchRow}>
+            <View style={[styles.searchBar, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <Ionicons name="search" size={18} color={theme.gray} />
+              <TextInput
+                placeholder="Search transactions..."
+                placeholderTextColor={theme.gray}
+                value={search}
+                onChangeText={setSearch}
+                style={[styles.searchInput, { color: theme.text }]}
               />
+            </View>
+            <TouchableOpacity 
+              onPress={() => router.push("/add-expense")}
+              style={[styles.addBtn, { backgroundColor: theme.primaryBg, borderColor: theme.primary, borderWidth: 1 }]}
+            >
+              <Ionicons name="add" size={28} color={theme.primary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* List Section */}
+          <View style={styles.flex1}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Recent Transactions</Text>
+            {loading && expenses.length === 0 ? (
+               <View style={styles.emptyContainer}>
+                 <ActivityIndicator size="large" color={theme.primary} />
+               </View>
+            ) : filteredExpenses.length > 0 ? (
+              <FlatList
+                data={filteredExpenses}
+                keyExtractor={(item) => item.id.toString()}
+                renderItem={({ item }) => (
+                  <ExpenseItem 
+                    item={item} 
+                    onDelete={deleteExpense} 
+                    onEdit={(e) => router.push({ pathname: "/add-expense", params: { editId: e.id } })}
+                    onPress={(e) => router.push({ 
+                      pathname: "/expense-details" as any, 
+                      params: { 
+                        id: e.id,
+                        title: e.title,
+                        amount: e.amount.toString(),
+                        type: e.type,
+                        category: e.category,
+                        payment_mode: e.payment_mode,
+                        tags: e.tags,
+                        created_at: e.created_at,
+                        is_recurring: e.is_recurring?.toString(),
+                        use_limit: e.use_limit?.toString()
+                      } 
+                    })}
+                  />
+                )}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.listContent}
+                refreshControl={
+                  <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />
+                }
+              />
+            ) : (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="receipt-outline" size={64} color={theme.lightGray} />
+                <Text style={[styles.emptyText, { color: theme.gray }]}>No transactions found</Text>
+                <TouchableOpacity 
+                   onPress={() => router.push("/add-expense")}
+                   style={[styles.emptyAddBtn, { borderColor: theme.primary }]}
+                >
+                  <Text style={{ color: theme.primary, fontWeight: 'bold' }}>Add Your First Item</Text>
+                </TouchableOpacity>
+              </View>
             )}
-          </TouchableOpacity>
+          </View>
         </View>
 
-        <View className="flex-row justify-between items-center mb-4 bg-gray-100 dark:bg-gray-800 p-2 rounded-xl">
-          <TouchableOpacity onPress={() => changeMonth(-1)} className="p-2">
-            <Ionicons name="chevron-back" size={24} color={theme.primary} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => {
-              setTempDate(new Date(currentDate));
-              setShowPicker(true);
-            }}
-            className="flex-row items-center px-4 py-2"
-          >
-            <Text className="text-lg font-bold text-black dark:text-white mr-1">
-              {formattedMonth}
-            </Text>
-            <Ionicons name="caret-down" size={12} color={theme.gray} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => changeMonth(1)} className="p-2">
-            <Ionicons name="chevron-forward" size={24} color={theme.primary} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Month/Year Picker Modal */}
+        {/* Month Picker Modal */}
         <Modal
           visible={showPicker}
           transparent={true}
           animationType="fade"
           onRequestClose={() => setShowPicker(false)}
         >
-          <View className="flex-1 justify-center items-center bg-black/50 px-6">
-            <View className="bg-white dark:bg-gray-900 w-full rounded-3xl p-6 shadow-2xl">
-              <Text className="text-xl font-bold mb-6 text-center text-black dark:text-white">
-                Choose Date
-              </Text>
-
-              <View className="flex-row justify-between mb-8">
-                {/* Year Selection */}
-                <View className="flex-1 mr-2">
-                  <Text className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 text-center">
-                    Year
-                  </Text>
-                  <ScrollView
-                    style={{ maxHeight: 200 }}
-                    showsVerticalScrollIndicator={false}
-                  >
-                    {Array.from(
-                      { length: 10 },
-                      (_, i) => new Date().getFullYear() - 5 + i,
-                    ).map((year) => (
-                      <TouchableOpacity
-                        key={year}
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Choose Month</Text>
+              
+              <View style={styles.pickerRow}>
+                <View style={styles.pickerCol}>
+                  <Text style={[styles.pickerLabel, { color: theme.gray }]}>YEAR</Text>
+                  <ScrollView showsVerticalScrollIndicator={false} style={styles.pickerScroll}>
+                    {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(year => (
+                      <TouchableOpacity 
+                        key={year} 
                         onPress={() => {
                           const nd = new Date(tempDate);
                           nd.setFullYear(year);
                           setTempDate(nd);
                         }}
-                        className={`py-3 rounded-xl mb-1 ${tempDate.getFullYear() === year ? "bg-cyan-100 dark:bg-cyan-900/40" : ""}`}
+                        style={[styles.pickerItem, tempDate.getFullYear() === year ? { backgroundColor: theme.primaryBg } : {}]}
                       >
-                        <Text
-                          className={`text-center font-bold ${tempDate.getFullYear() === year ? "text-cyan-800 dark:text-cyan-400" : "text-gray-500"}`}
-                        >
-                          {year}
-                        </Text>
+                        <Text style={[styles.pickerItemText, tempDate.getFullYear() === year ? { color: theme.primary, fontWeight: 'bold' } : { color: theme.gray }]}>{year}</Text>
                       </TouchableOpacity>
                     ))}
                   </ScrollView>
                 </View>
-
-                {/* Month Selection */}
-                <View className="flex-1 ml-2">
-                  <Text className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 text-center">
-                    Month
-                  </Text>
-                  <ScrollView
-                    style={{ maxHeight: 200 }}
-                    showsVerticalScrollIndicator={false}
-                  >
-                    {Array.from({ length: 12 }, (_, i) => i).map((month) => {
-                      const mName = new Date(2000, month).toLocaleString(
-                        "default",
-                        { month: "short" },
-                      );
+                <View style={styles.pickerCol}>
+                  <Text style={[styles.pickerLabel, { color: theme.gray }]}>MONTH</Text>
+                  <ScrollView showsVerticalScrollIndicator={false} style={styles.pickerScroll}>
+                    {Array.from({ length: 12 }, (_, i) => i).map(month => {
+                      const mName = new Date(2000, month).toLocaleString('default', { month: 'short' });
                       const isSelected = tempDate.getMonth() === month;
                       return (
-                        <TouchableOpacity
-                          key={month}
+                        <TouchableOpacity 
+                          key={month} 
                           onPress={() => {
                             const nd = new Date(tempDate);
                             nd.setMonth(month);
                             setTempDate(nd);
                           }}
-                          className={`py-3 rounded-xl mb-1 ${isSelected ? "bg-cyan-100 dark:bg-cyan-900/40" : ""}`}
+                          style={[styles.pickerItem, isSelected ? { backgroundColor: theme.primaryBg } : {}]}
                         >
-                          <Text
-                            className={`text-center font-bold ${isSelected ? "text-cyan-800 dark:text-cyan-400" : "text-gray-500"}`}
-                          >
-                            {mName}
-                          </Text>
+                          <Text style={[styles.pickerItemText, isSelected ? { color: theme.primary, fontWeight: 'bold' } : { color: theme.gray }]}>{mName}</Text>
                         </TouchableOpacity>
                       );
                     })}
@@ -319,163 +390,73 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              <View className="flex-row gap-3">
-                <TouchableOpacity
+              <View style={styles.modalActions}>
+                <TouchableOpacity 
                   onPress={() => setShowPicker(false)}
-                  className="flex-1 p-4 rounded-2xl bg-gray-100 dark:bg-gray-800"
+                  style={[styles.modalBtn, { backgroundColor: theme.lightGray }]}
                 >
-                  <Text className="text-center font-bold text-gray-600 dark:text-gray-400">
-                    Cancel
-                  </Text>
+                  <Text style={{ color: theme.gray, fontWeight: 'bold' }}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
+                <TouchableOpacity 
                   onPress={() => {
                     setCurrentDate(new Date(tempDate));
                     setShowPicker(false);
                   }}
-                  className="flex-1 p-4 rounded-2xl bg-cyan-800"
+                  style={[styles.modalBtn, { backgroundColor: theme.primary }]}
                 >
-                  <Text className="text-center font-bold text-white">
-                    Apply
-                  </Text>
+                  <Text style={{ color: '#fff', fontWeight: 'bold' }}>Apply</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </View>
         </Modal>
-
-        <View className="bg-cyan-800 p-5 rounded-3xl mb-6 shadow-lg shadow-cyan-900/30">
-          <View className="mb-4">
-            <Text className="text-cyan-200 text-xs font-bold uppercase tracking-widest pl-1 mb-1">
-              Net Balance
-            </Text>
-            <Text
-              className={`text-4xl font-extrabold ${balance >= 0 ? "text-green-400" : "text-red-400"}`}
-            >
-              {balance >= 0 ? "+ " : "- "}₹ {Math.abs(balance).toFixed(2)}
-            </Text>
-          </View>
-
-          <View className="flex-row justify-between pt-4 border-t border-cyan-700/50">
-            <View>
-              <Text className="text-cyan-200 text-[10px] font-bold uppercase tracking-widest mb-1">
-                Income
-              </Text>
-              <View className="flex-row items-center">
-                <Ionicons
-                  name="trending-up"
-                  size={16}
-                  color="#4ade80"
-                  className="mr-1"
-                />
-                <Text className="text-green-400 text-lg font-bold">
-                  + ₹{totalIncome.toFixed(2)}
-                </Text>
-              </View>
-            </View>
-            <View className="items-end">
-              <Text className="text-cyan-200 text-[10px] font-bold uppercase tracking-widest mb-1">
-                Expenses
-              </Text>
-              <View className="flex-row items-center">
-                <Ionicons
-                  name="trending-down"
-                  size={16}
-                  color="#f87171"
-                  className="mr-1"
-                />
-                <Text className="text-red-400 text-lg font-bold">
-                  - ₹{totalExpenses.toFixed(0)}
-                </Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        <View className="flex-row items-center bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl mb-4 px-3">
-          <Ionicons name="search" size={20} color={theme.gray} />
-          <TextInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search expense..."
-            placeholderTextColor={theme.gray}
-            className="flex-1 py-3 px-2 text-black dark:text-white"
-          />
-          {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch("")}>
-              <Ionicons name="close-circle" size={20} color={theme.gray} />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        <FlatList
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 100 }}
-          data={filteredExpenses}
-          keyExtractor={(i, index) => (i.id || i._id || index).toString()}
-          renderItem={({ item }) => (
-            <ExpenseItem
-              item={item}
-              onEdit={(expense) =>
-                router.push({
-                  pathname: "/add-expense" as any,
-                  params: {
-                    id: expense.id.toString(),
-                    title: expense.title,
-                    amount: expense.amount,
-                    type: expense.type,
-                    category: expense.category,
-                    payment_mode: expense.payment_mode,
-                    is_recurring: expense.is_recurring?.toString(),
-                    use_limit: (expense.use_limit !== undefined ? expense.use_limit : (expense.useLimit ? 1 : 0)).toString(),
-                    created_at: expense.created_at,
-                    tags: expense.tags
-                  },
-                })
-              }
-              onPress={(expense) =>
-                router.push({
-                  pathname: "/expense-details" as any,
-                  params: {
-                    id: expense.id.toString(),
-                    title: expense.title,
-                    amount: expense.amount,
-                    type: expense.type,
-                    category: expense.category,
-                    payment_mode: expense.payment_mode,
-                    is_recurring: expense.is_recurring?.toString(),
-                    use_limit: (expense.use_limit !== undefined ? expense.use_limit : (expense.useLimit ? 1 : 0)).toString(),
-                    created_at: expense.created_at,
-                    tags: expense.tags
-                  },
-                })
-              }
-              onDelete={deleteExpense}
-            />
-          )}
-          ListEmptyComponent={
-            <View className="items-center mt-10">
-              <Ionicons
-                name="receipt-outline"
-                size={64}
-                color={theme.tabIconDefault}
-              />
-              <Text className="text-center text-gray-400 mt-4 text-lg">
-                No expenses found for this month
-              </Text>
-            </View>
-          }
-        />
-
-        <TouchableOpacity
-          onPress={() => router.push("/add-expense" as any)}
-          style={{ backgroundColor: theme.primary }}
-          className="absolute bottom-10 right-8 w-16 h-16 rounded-full items-center justify-center shadow-xl shadow-cyan-900/40"
-        >
-          <Ionicons name="add" size={32} color="white" />
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
-    </SafeAreaView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safeArea: { flex: 1 },
+  flex1: { flex: 1 },
+  header: { padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerAvatar: { width: 50, height: 50, borderRadius: 30, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  avatarImg: { width: '100%', height: '100%' },
+  avatarInitial: { fontSize: 16, fontWeight: 'bold' },
+  headerTitle: { fontSize: 20, fontWeight: 'bold' },
+  notificationBtn: { position: 'relative', padding: 8 },
+  unreadBadge: { position: 'absolute', right: 4, top: 4, minWidth: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'white' },
+  unreadText: { color: 'white', fontSize: 9, fontWeight: 'bold' },
+  balanceCard: { margin: 16, padding: 24, borderRadius: 32, borderWidth: 1, shadowOpacity: 0.1, shadowRadius: 10, elevation: 4 },
+  balanceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  balanceLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.2 },
+  datePickerBtn: { flexDirection: 'row', alignItems: 'center' },
+  monthLabel: { fontSize: 13, fontWeight: 'bold', marginRight: 4 },
+  balanceVal: { fontSize: 36, fontWeight: '800', marginBottom: 24 },
+  statsRow: { flexDirection: 'row', alignItems: 'center' },
+  statItem: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  statIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  statLabel: { fontSize: 10, fontWeight: 'bold' },
+  incomeVal: { fontSize: 16, fontWeight: 'bold' },
+  expenseVal: { fontSize: 16, fontWeight: 'bold' },
+  vDivider: { width: 1, height: 40, marginHorizontal: 20 },
+  searchRow: { flexDirection: 'row', paddingHorizontal: 16, marginBottom: 24, gap: 12 },
+  searchBar: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, borderRadius: 20, borderWidth: 1 },
+  searchInput: { flex: 1, height: 50, marginLeft: 12, fontSize: 15, fontWeight: '500' },
+  addBtn: { width: 50, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center', elevation: 5, shadowOpacity: 0.3, shadowRadius: 5 },
+  sectionTitle: { fontSize: 18, fontWeight: 'bold', marginHorizontal: 16, marginBottom: 12 },
+  listContent: { paddingHorizontal: 16, paddingBottom: 100 },
+  emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
+  emptyText: { marginTop: 16, fontSize: 15, fontWeight: '500' },
+  emptyAddBtn: { marginTop: 24, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 16, borderWidth: 1.5 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalContent: { width: '100%', padding: 28, borderRadius: 36, borderWidth: 1 },
+  modalTitle: { fontSize: 22, fontWeight: 'bold', marginBottom: 24, textAlign: 'center' },
+  pickerRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 32 },
+  pickerCol: { flex: 1, marginHorizontal: 8 },
+  pickerLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginBottom: 16, textAlign: 'center' },
+  pickerScroll: { maxHeight: 180 },
+  pickerItem: { paddingVertical: 12, borderRadius: 16, marginBottom: 4 },
+  pickerItemText: { textAlign: 'center', fontSize: 15 },
+  modalActions: { flexDirection: 'row', gap: 12 },
+  modalBtn: { flex: 1, padding: 16, borderRadius: 20, alignItems: 'center' },
+});

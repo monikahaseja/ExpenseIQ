@@ -3,8 +3,7 @@ import { View, Text, FlatList, TouchableOpacity, Alert, StyleSheet } from "react
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { Colors } from "../../constants/colors";
-import { useColorScheme } from "nativewind";
+import { useTheme } from "../../context/ThemeContext";
 import { 
     getNotifications, 
     deleteNotification, 
@@ -16,8 +15,7 @@ import {
 import { COLOR_MAP, ICON_MAP, NotificationType } from "../../components/NotificationContext";
 
 export default function NotificationsScreen() {
-    const { colorScheme } = useColorScheme();
-    const theme = Colors[colorScheme ?? "light"];
+    const { theme } = useTheme();
     const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
 
     const fetchNotifications = async () => {

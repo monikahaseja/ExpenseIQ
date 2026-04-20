@@ -43,7 +43,7 @@ router.post('/signup', async (req, res) => {
                     email: user.email, 
                     phoneNumber: user.phoneNumber,
                     profilePhoto: user.profilePhoto,
-                    password: user.password
+                    createdAt: user.createdAt
                 }
             },
             total_data: 1
@@ -88,7 +88,7 @@ router.post('/login', async (req, res) => {
                     email: user.email, 
                     phoneNumber: user.phoneNumber,
                     profilePhoto: user.profilePhoto,
-                    password: user.password
+                    createdAt: user.createdAt
                 }
             },
             total_data: 1
@@ -101,7 +101,9 @@ router.post('/login', async (req, res) => {
 // Get Profile
 router.get('/profile', auth, async (req, res) => {
     try {
-        // Auth middleware will be used here to populate req.user
+        const user = await User.findById(req.user.userId);
+        if (!user) return res.status(404).json({ message: 'User not found' });
+        
         res.json({
             message: 'Profile retrieved successfully',
             data: {
@@ -109,7 +111,8 @@ router.get('/profile', auth, async (req, res) => {
                 name: user.name,
                 email: user.email,
                 phoneNumber: user.phoneNumber,
-                profilePhoto: user.profilePhoto
+                profilePhoto: user.profilePhoto,
+                createdAt: user.createdAt
             },
             total_data: 1
         });
@@ -117,6 +120,7 @@ router.get('/profile', auth, async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 });
+
 
 // Update Profile
 router.put('/profile', auth, async (req, res) => {
@@ -138,7 +142,8 @@ router.put('/profile', auth, async (req, res) => {
                 name: user.name, 
                 email: user.email, 
                 phoneNumber: user.phoneNumber, 
-                profilePhoto: user.profilePhoto 
+                profilePhoto: user.profilePhoto,
+                createdAt: user.createdAt
             },
             total_data: 1
         });

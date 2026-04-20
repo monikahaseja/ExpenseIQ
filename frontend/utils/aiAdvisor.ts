@@ -1,11 +1,14 @@
 import { db, getBudget, getSetting, saveSetting } from "../db/database";
 import { CATEGORIES } from "../constants/categories";
+import api from "./api";
 
 // ─── Types ───────────────────────────────────────────────────────
 export interface FinancialSummary {
   totalIncome: number;
   totalExpenses: number;
+  budgetSpent: number;
   netBalance: number;
+
   budgetLimit: number;
   budgetUsedPercent: number;
   topExpenses: { title: string; amount: number; category?: string }[];
@@ -45,39 +48,61 @@ const getMonthLabel = (date: Date) =>
   date.toLocaleString("default", { month: "long", year: "numeric" });
 
 // ─── Core: Financial Summary ─────────────────────────────────────
-export async function getFinancialSummary(): Promise<FinancialSummary> {
+export async function getFinancialSummary(token?: string | null): Promise<FinancialSummary> {
   const now = new Date();
   const monthKey = getMonthKey(now);
   const monthLabel = getMonthLabel(now);
 
-  // Current month transactions
-  const rows = await db.getAllAsync<{
-    title: string;
-    amount: number;
-    type: string;
-    category: string;
-    created_at: string;
-  }>(
-    "SELECT title, amount, type, category, created_at FROM transactions WHERE created_at LIKE ? ORDER BY amount DESC;",
-    [`${monthKey}%`]
-  );
+  let rows: any[] = [];
+  
+  if (token) {
+    try {
+      const response = await api.get(`/transactions`, { params: { month: (now.getMonth() + 1).toString().padStart(2, "0") } });
+      const year = now.getFullYear();
+      const monthStr = `${year}-${(now.getMonth() + 1).toString().padStart(2, "0")}`;
+      rows = response.data.data.filter((e: any) => e.created_at && e.created_at.startsWith(monthStr));
+    } catch (e) {
+      console.warn("Advisor API fetch failed, falling back to local DB");
+      rows = await db.getAllAsync<any>(
+        "SELECT title, amount, type, category, created_at FROM transactions WHERE created_at LIKE ? ORDER BY amount DESC;",
+        [`${monthKey}%`]
+      );
+    }
+  } else {
+    rows = await db.getAllAsync<any>(
+      "SELECT title, amount, type, category, created_at FROM transactions WHERE created_at LIKE ? ORDER BY amount DESC;",
+      [`${monthKey}%`]
+    );
+  }
+
 
   let totalIncome = 0;
   let totalExpenses = 0;
+  let budgetSpent = 0;
   const categoryBreakdown: { [key: string]: number } = {};
   const expenseItems: { title: string; amount: number; category: string }[] = [];
 
   rows.forEach((row) => {
+    const amount = parseFloat(row.amount) || 0;
     if (row.type === "income") {
-      totalIncome += row.amount;
+      totalIncome += amount;
     } else {
-      totalExpenses += row.amount;
-      expenseItems.push({ title: row.title, amount: row.amount, category: row.category });
+      totalExpenses += amount;
+      
+      // Use use_limit (SQLite) or useLimit (API)
+      const shouldCountInBudget = row.useLimit !== false && row.use_limit !== 0;
+      if (shouldCountInBudget) {
+        budgetSpent += amount;
+      }
+
+      expenseItems.push({ title: row.title, amount: amount, category: row.category });
       
       const cat = row.category || "others";
-      categoryBreakdown[cat] = (categoryBreakdown[cat] || 0) + row.amount;
+      categoryBreakdown[cat] = (categoryBreakdown[cat] || 0) + amount;
     }
   });
+
+
 
   // Last month data
   const lastMonth = new Date(now);
@@ -100,9 +125,23 @@ export async function getFinancialSummary(): Promise<FinancialSummary> {
   });
 
   // Budget
-  const budgetLimit = await getBudget(monthKey);
+  let budgetLimit = 0;
+  if (token) {
+    try {
+      const budgetRes = await api.get(`/budgets?month=${monthKey}`);
+      if (budgetRes.data.data.length > 0) {
+        budgetLimit = budgetRes.data.data[0].amount;
+      }
+    } catch (e) {
+      budgetLimit = await getBudget(monthKey);
+    }
+  } else {
+    budgetLimit = await getBudget(monthKey);
+  }
+
   const budgetUsedPercent =
-    budgetLimit > 0 ? (totalExpenses / budgetLimit) * 100 : 0;
+    budgetLimit > 0 ? (budgetSpent / budgetLimit) * 100 : 0;
+
 
   // Spending trend
   let spendingTrend: "up" | "down" | "same" | "no_data" = "no_data";
@@ -119,7 +158,9 @@ export async function getFinancialSummary(): Promise<FinancialSummary> {
   return {
     totalIncome,
     totalExpenses,
+    budgetSpent,
     netBalance: totalIncome - totalExpenses,
+
     budgetLimit,
     budgetUsedPercent,
     topExpenses: expenseItems.slice(0, 5),
@@ -138,8 +179,8 @@ export async function getFinancialSummary(): Promise<FinancialSummary> {
 }
 
 // ─── Core: Generate Insights ─────────────────────────────────────
-export async function generateInsights(): Promise<Insight[]> {
-  const summary = await getFinancialSummary();
+export async function generateInsights(token?: string | null): Promise<Insight[]> {
+  const summary = await getFinancialSummary(token);
   const insights: Insight[] = [];
 
   if (summary.transactionCount === 0) {
@@ -154,111 +195,155 @@ export async function generateInsights(): Promise<Insight[]> {
     return insights;
   }
 
-  if (summary.budgetLimit > 0 && summary.budgetUsedPercent >= 100) {
-    const overAmount = summary.totalExpenses - summary.budgetLimit;
-    insights.push({
-      id: "budget_exceeded",
-      icon: "🚨",
-      title: "Budget Exceeded!",
-      message: `You've exceeded your budget by ₹${overAmount.toFixed(0)}. Consider cutting back on non-essential spending.`,
-      type: "danger",
-    });
+  // --- PLAN A: EXPENSE SUGGESTIONS ---
+  
+  // 1. Unusual transaction detection (5x daily average)
+  const expenseOnlyRows = summary.allTransactions.filter(r => r.type === "expense");
+  if (expenseOnlyRows.length > 0) {
+    const today = new Date().toISOString().split('T')[0];
+    const todaysExpenses = expenseOnlyRows.filter(r => r.created_at.startsWith(today));
+    if (todaysExpenses.length > 0) {
+      const largestToday = Math.max(...todaysExpenses.map(r => r.amount));
+      if (largestToday > summary.avgExpense * 5 && summary.avgExpense > 0) {
+        insights.push({
+          id: "unusual_expense",
+          icon: "❗",
+          title: "Unusual Expense Today",
+          message: `₹${largestToday.toFixed(0)} is 5x your daily average. Was this a planned major expense?`,
+          type: "warning"
+        });
+      }
+    }
   }
 
-  if (
-    summary.budgetLimit > 0 &&
-    summary.budgetUsedPercent >= 80 &&
-    summary.budgetUsedPercent < 100
-  ) {
-    const remaining = summary.budgetLimit - summary.totalExpenses;
-    insights.push({
-      id: "budget_warning",
-      icon: "⚠️",
-      title: "Budget Alert",
-      message: `You've used ${summary.budgetUsedPercent.toFixed(0)}% of your budget. Only ₹${remaining.toFixed(0)} remaining.`,
-      type: "warning",
-    });
+  // 2. Budget adherence logic (Refined)
+  if (summary.budgetLimit > 0) {
+     if (summary.budgetUsedPercent >= 100) {
+        insights.push({
+          id: "budget_exceeded",
+          icon: "🚨",
+          title: "Budget Exceeded!",
+          message: `You've used ${summary.budgetSpent.toFixed(0)} which is over your ₹${summary.budgetLimit.toFixed(0)} limit. Stop non-essential spending!`,
+          type: "danger",
+        });
+     } else if (summary.budgetUsedPercent >= 85) {
+        const remainingDays = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate() - new Date().getDate();
+        const dailyAllowance = (summary.budgetLimit - summary.budgetSpent) / (remainingDays || 1);
+        insights.push({
+          id: "budget_tight",
+          icon: "⚠️",
+          title: "Budget Running Low",
+          message: `You've used ${summary.budgetUsedPercent.toFixed(0)}% of budget. Limit daily spending to ₹${dailyAllowance.toFixed(0)} for ${remainingDays} days.`,
+          type: "warning",
+        });
+     }
   }
 
-  if (summary.spendingTrend === "up") {
-    const increase =
-      ((summary.totalExpenses - summary.lastMonthExpenses) /
-        summary.lastMonthExpenses) *
-      100;
-    insights.push({
-      id: "spending_up",
-      icon: "📈",
-      title: "Spending Increased",
-      message: `Spending is up ${increase.toFixed(0)}% vs last month (₹${summary.lastMonthExpenses.toFixed(0)} → ₹${summary.totalExpenses.toFixed(0)}).`,
-      type: "warning",
-    });
+
+  // 3. Category Overspending (Example: 60% higher than average - simulated for now)
+  const foodSpending = summary.categoryBreakdown['food'] || 0;
+  if (foodSpending > summary.totalExpenses * 0.4 && summary.totalExpenses > 5000) {
+     insights.push({
+       id: "food_overspend",
+       icon: "🍔",
+       title: "High Food Spending",
+       message: `Food accounts for ${((foodSpending/summary.totalExpenses)*100).toFixed(0)}% of your expenses. Try meal prepping to save ~₹2,000.`,
+       type: "tip"
+     });
   }
 
+  // --- PLAN B: INVESTMENT & SAVINGS SUGGESTIONS ---
+
+  // 1. Surplus savings (> 20% of income)
+  if (summary.totalIncome > 0) {
+    const savingsRate = ((summary.totalIncome - summary.totalExpenses) / summary.totalIncome) * 100;
+    if (savingsRate >= 20) {
+      insights.push({
+        id: "surplus_savings",
+        icon: "💰",
+        title: "Strong Savings Rate!",
+        message: `You saved ${savingsRate.toFixed(0)}% of income! Consider investing ₹${(summary.netBalance * 0.5).toFixed(0)} in a SIP or FD.`,
+        type: "success",
+      });
+    } else if (savingsRate < 5 && summary.totalIncome > 0) {
+       insights.push({
+         id: "low_savings",
+         icon: "📉",
+         title: "Low Savings Alert",
+         message: "Your savings rate is below 5%. Aim to allocate 20% to savings (₹" + (summary.totalIncome * 0.2).toFixed(0) + ") for goal safety.",
+         type: "warning"
+       });
+    }
+  }
+
+  // 2. Emergency Fund Check (3 months of expenses)
+  const estimatedEmergencyFund = summary.totalExpenses * 3;
+  if (summary.netBalance > 5000) {
+     insights.push({
+       id: "emergency_fund_tip",
+       icon: "🛡️",
+       title: "Emergency Fund Goal",
+       message: `Aim for ₹${estimatedEmergencyFund.toFixed(0)} (3 months' buffer). You're already on your way!`,
+       type: "tip"
+     });
+  }
+
+  // 3. Idle Money Check
+  if (summary.netBalance > 50000) {
+     insights.push({
+       id: "idle_money",
+       icon: "📈",
+       title: "Idle Money Tip",
+       message: "You have a high surplus. Parking ₹30,000 in a liquid fund could earn ~6% annually vs a savings account.",
+       type: "success"
+     });
+  }
+
+  // --- PLAN C: SMART TIPS ---
+
+  // 1. 50-30-20 Rule
+  insights.push({
+    id: "rule_50_30_20",
+    icon: "⚖️",
+    title: "The 50-30-20 Rule",
+    message: "Allocate 50% to needs, 30% to wants, and 20% to savings for a balanced financial life.",
+    type: "info"
+  });
+
+  // 2. No income detected
+  if (summary.totalIncome === 0 && summary.totalExpenses > 0) {
+     insights.push({
+       id: "no_income",
+       icon: "💸",
+       title: "No Income Logged",
+       message: "You haven't added any income yet. Don't forget to add your salary or payouts to see net balance!",
+       type: "info"
+     });
+  }
+
+  // 3. Spending Trends
   if (summary.spendingTrend === "down") {
-    const decrease =
-      ((summary.lastMonthExpenses - summary.totalExpenses) /
-        summary.lastMonthExpenses) *
-      100;
     insights.push({
       id: "spending_down",
       icon: "📉",
-      title: "Great Job Saving!",
-      message: `Spending decreased by ${decrease.toFixed(0)}% vs last month. Keep it up!`,
+      title: "Great Trend!",
+      message: `Spending is lower than last month. You're doing a great job managing your lifestyle!`,
       type: "success",
-    });
-  }
-
-  if (summary.netBalance > 0) {
-    insights.push({
-      id: "positive_balance",
-      icon: "✅",
-      title: "Positive Cash Flow",
-      message: `Surplus of ₹${summary.netBalance.toFixed(0)} this month. Consider saving or investing.`,
-      type: "success",
-    });
-  }
-
-  if (summary.netBalance < 0) {
-    insights.push({
-      id: "negative_balance",
-      icon: "🔴",
-      title: "Negative Cash Flow",
-      message: `Spending ₹${Math.abs(summary.netBalance).toFixed(0)} more than you earn. Review your top expenses.`,
-      type: "danger",
-    });
-  }
-
-  if (summary.topExpenses.length > 0) {
-    const top = summary.topExpenses[0];
-    insights.push({
-      id: "top_expense",
-      icon: "💡",
-      title: "Biggest Expense",
-      message: `"${top.title}" at ₹${top.amount.toFixed(0)}. Can you reduce this?`,
-      type: "tip",
-    });
-  }
-
-  if (summary.budgetLimit <= 0 && summary.totalExpenses > 0) {
-    insights.push({
-      id: "no_budget",
-      icon: "🎯",
-      title: "Set a Budget",
-      message: `No budget set for ${summary.monthLabel}. Go to Settings to set one.`,
-      type: "info",
     });
   }
 
   return insights;
 }
 
+
 // ─── Core: Unified Local AI Advisor ──────────────────────────────
 export async function handleQuery(
   question: string,
-  chatHistory: ChatMessage[] = []
+  chatHistory: ChatMessage[] = [],
+  token?: string | null
 ): Promise<string> {
   // Get financial context
-  const summary = await getFinancialSummary();
+  const summary = await getFinancialSummary(token);
 
   // Use the high-intelligence local engine exclusively
   return handleLiteQuery(question, summary);

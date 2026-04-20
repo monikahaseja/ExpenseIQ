@@ -6,10 +6,13 @@ import { initDB } from "../db/database";
 import { Colors } from "../constants/colors";
 import { NotificationProvider } from "../components/NotificationContext";
 import { AuthProvider, useAuth } from "../context/AuthContext";
+import { ThemeProvider, useTheme } from "../context/ThemeContext";
+import * as SystemUI from "expo-system-ui";
+import { StatusBar } from "expo-status-bar";
 import "../global.css";
 
 function MainLayout() {
-  const { colorScheme } = useColorScheme();
+  const { theme, themeName } = useTheme();
   const [dbLoaded, setDbLoaded] = useState(false);
   const { user, isLoading: authLoading } = useAuth();
   const segments = useSegments();
@@ -20,6 +23,10 @@ function MainLayout() {
       .then(() => setDbLoaded(true))
       .catch((err) => console.error("Database initialization failed:", err));
   }, []);
+
+  useEffect(() => {
+    SystemUI.setBackgroundColorAsync(theme.background);
+  }, [theme.background]);
 
   useEffect(() => {
     if (authLoading || !dbLoaded) return;
@@ -36,7 +43,6 @@ function MainLayout() {
   }, [user, segments, authLoading, dbLoaded]);
 
   if (!dbLoaded || authLoading) {
-    const theme = Colors[colorScheme ?? 'light'];
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.background }}>
         <ActivityIndicator size="large" color={theme.primary} />
@@ -47,10 +53,11 @@ function MainLayout() {
     );
   }
 
-  const theme = Colors[colorScheme ?? 'light'];
+  const isLightBg = themeName === 'light' || themeName === 'cyber' || themeName === 'tropical';
 
   return (
     <NotificationProvider>
+      <StatusBar style={isLightBg ? "dark" : "light"} />
       <Stack>
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -86,6 +93,10 @@ function MainLayout() {
             headerShown: false,
           }}
         />
+        <Stack.Screen name="about" options={{ headerShown: false }} />
+        <Stack.Screen name="privacy" options={{ headerShown: false }} />
+        <Stack.Screen name="help-center" options={{ headerShown: false }} />
+        <Stack.Screen name="rate-app" options={{ headerShown: false }} />
       </Stack>
     </NotificationProvider>
   );
@@ -93,8 +104,10 @@ function MainLayout() {
 
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <MainLayout />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <MainLayout />
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
