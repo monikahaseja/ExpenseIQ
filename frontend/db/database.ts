@@ -60,6 +60,10 @@ export const initDB = async () => {
     await db.execAsync("ALTER TABLE transactions ADD COLUMN use_limit INTEGER DEFAULT 1;");
   } catch (e) {}
 
+  try {
+    await db.execAsync("ALTER TABLE transactions ADD COLUMN remote_id TEXT;");
+  } catch (e) {}
+
   await db.execAsync(`
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,

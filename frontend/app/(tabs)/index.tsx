@@ -3,8 +3,6 @@ import { View, Text, ScrollView, TouchableOpacity, Alert, RefreshControl, Sectio
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
-import { useColorScheme } from "nativewind";
-import { Colors } from "../../constants/colors";
 import { db, getUnreadCount } from "../../db/database";
 import ExpenseItem, { Expense } from "../../components/ExpenseItem";
 import { useNotification } from "../../components/NotificationContext";
@@ -62,6 +60,36 @@ export default function HomeScreen() {
       }
       
       setExpenses(rows);
+
+      // Sync API data to local DB for offline access
+      if (user && rows.length > 0) {
+        try {
+          // Delete local entries for this month to avoid duplicates
+          await db.runAsync("DELETE FROM transactions WHERE created_at LIKE ?;", [`${monthStr}%`]);
+          
+          // Insert new entries from API
+          for (const exp of rows) {
+            await db.runAsync(
+              "INSERT INTO transactions (remote_id, title, amount, type, category, payment_mode, tags, is_recurring, use_limit, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+              [
+                exp.id.toString(), 
+                exp.title || "", 
+                exp.amount || 0, 
+                exp.type || "expense", 
+                exp.category || null, 
+                exp.payment_mode || null, 
+                exp.tags || null, 
+                exp.is_recurring ? 1 : 0, 
+                exp.use_limit ? 1 : 0, 
+                exp.created_at || new Date().toISOString(), 
+                exp.updated_at || new Date().toISOString()
+              ]
+            );
+          }
+        } catch (syncErr) {
+          console.warn("Failed to sync API data to local DB:", syncErr);
+        }
+      }
 
       const count = await getUnreadCount(user?.id || null);
       setUnreadCount(count);
@@ -347,7 +375,21 @@ export default function HomeScreen() {
                     item={item} 
                     showDate={false}
                     onDelete={deleteExpense} 
-                    onEdit={(e) => router.push({ pathname: "/add-expense", params: { editId: e.id } })}
+                    onEdit={(e) => router.push({ 
+                      pathname: "/add-expense", 
+                      params: { 
+                        id: e.id,
+                        title: e.title,
+                        amount: e.amount.toString(),
+                        type: e.type,
+                        category: e.category,
+                        payment_mode: e.payment_mode,
+                        tags: e.tags,
+                        created_at: e.created_at,
+                        is_recurring: e.is_recurring ? "1" : "0",
+                        use_limit: e.use_limit === 0 ? "0" : "1"
+                      } 
+                    })}
                     onPress={(e) => router.push({ 
                       pathname: "/expense-details" as any, 
                       params: { 
@@ -484,37 +526,37 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   flex1: { flex: 1 },
-  header: { paddingHorizontal: 16, paddingVertical: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  headerAvatar: { width: 45, height: 45, borderRadius: 25, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  header: { paddingHorizontal: 16, paddingVertical: 4, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   avatarImg: { width: '100%', height: '100%' },
-  avatarInitial: { fontSize: 16, fontWeight: 'bold' },
-  headerTitle: { fontSize: 18, fontWeight: 'bold' },
-  notificationBtn: { position: 'relative', padding: 8 },
-  unreadBadge: { position: 'absolute', right: 4, top: 4, minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'white' },
-  unreadText: { color: 'white', fontSize: 8, fontWeight: 'bold' },
-  balanceCard: { marginHorizontal: 16, marginTop: 8, marginBottom: 16, padding: 20, borderRadius: 24, borderWidth: 1, shadowOpacity: 0.1, shadowRadius: 10, elevation: 4 },
-  balanceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  balanceLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 1 },
+  avatarInitial: { fontSize: 14, fontWeight: 'bold' },
+  headerTitle: { fontSize: 20, fontWeight: 'bold' },
+  notificationBtn: { position: 'relative', padding: 6 },
+  unreadBadge: { position: 'absolute', right: 2, top: 2, minWidth: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: 'white' },
+  unreadText: { color: 'white', fontSize: 7, fontWeight: 'bold' },
+  balanceCard: { marginHorizontal: 16, marginTop: 4, marginBottom: 10, padding: 16, borderRadius: 20, borderWidth: 1, shadowOpacity: 0.1, shadowRadius: 10, elevation: 4 },
+  balanceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  balanceLabel: { fontSize: 8, fontWeight: '800', letterSpacing: 1 },
   datePickerBtn: { flexDirection: 'row', alignItems: 'center' },
-  monthLabel: { fontSize: 12, fontWeight: 'bold', marginRight: 4 },
-  balanceVal: { fontSize: 32, fontWeight: '800', marginBottom: 16 },
+  monthLabel: { fontSize: 11, fontWeight: 'bold', marginRight: 4 },
+  balanceVal: { fontSize: 28, fontWeight: '800', marginBottom: 10 },
   statsRow: { flexDirection: 'row', alignItems: 'center' },
   statItem: { flex: 1, flexDirection: 'row', alignItems: 'center' },
   statIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 8 },
   statLabel: { fontSize: 9, fontWeight: 'bold' },
   incomeVal: { fontSize: 14, fontWeight: 'bold' },
   expenseVal: { fontSize: 14, fontWeight: 'bold' },
-  vDivider: { width: 1, height: 30, marginHorizontal: 12 },
-  categoryCard: { marginHorizontal: 16, marginBottom: 16, paddingVertical: 12, borderRadius: 24, shadowOpacity: 0.05, shadowRadius: 5, elevation: 2 },
-  categoryItem: { alignItems: 'center', width: 64 },
-  categoryIcon: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
-  categoryLabel: { fontSize: 10, fontWeight: '700' },
-  searchRow: { flexDirection: 'row', paddingHorizontal: 16, marginBottom: 16, gap: 10 },
-  searchBar: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, borderRadius: 16, borderWidth: 1 },
-  searchInput: { flex: 1, height: 45, marginLeft: 8, fontSize: 14, fontWeight: '500' },
-  addBtn: { width: 45, height: 45, borderRadius: 22.5, alignItems: 'center', justifyContent: 'center', elevation: 3, shadowOpacity: 0.2, shadowRadius: 3 },
-  sectionTitle: { fontSize: 16, fontWeight: 'bold', marginHorizontal: 16, marginBottom: 8 },
-  sectionHeader: { paddingHorizontal: 16, paddingVertical: 10, marginTop: 8 },
+  vDivider: { width: 1, height: 24, marginHorizontal: 10 },
+  categoryCard: { marginHorizontal: 16, marginBottom: 10, paddingVertical: 8, borderRadius: 20, shadowOpacity: 0.05, shadowRadius: 5, elevation: 2 },
+  categoryItem: { alignItems: 'center', width: 60 },
+  categoryIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
+  categoryLabel: { fontSize: 9, fontWeight: '700' },
+  searchRow: { flexDirection: 'row', paddingHorizontal: 16, marginBottom: 10, gap: 8 },
+  searchBar: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, borderRadius: 12, borderWidth: 1 },
+  searchInput: { flex: 1, height: 40, marginLeft: 6, fontSize: 13, fontWeight: '500' },
+  addBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', elevation: 3, shadowOpacity: 0.2, shadowRadius: 3 },
+  sectionTitle: { fontSize: 15, fontWeight: 'bold', marginHorizontal: 16, marginBottom: 6 },
+  sectionHeader: { paddingHorizontal: 16, paddingVertical: 8, marginTop: 4 },
   sectionHeaderText: { fontSize: 11, fontWeight: 'bold', letterSpacing: 0.5 },
   listContent: { paddingHorizontal: 16, paddingBottom: 100 },
   emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 40 },

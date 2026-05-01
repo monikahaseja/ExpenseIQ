@@ -31,7 +31,7 @@ export default function AddExpenseScreen() {
   const { showNotification } = useNotification();
   const { user } = useAuth();
 
-  const expenseId = params.id as string | null;
+  const expenseId = (params.id || params.editId) as string | null;
 
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
@@ -45,6 +45,7 @@ export default function AddExpenseScreen() {
   const [titleError, setTitleError] = useState("");
   const [amountError, setAmountError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [fetchingData, setFetchingData] = useState(false);
   const [transactionDate, setTransactionDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [tempDate, setTempDate] = useState(new Date());
@@ -77,10 +78,74 @@ export default function AddExpenseScreen() {
       
       setPaymentMode((params.payment_mode as string) || "cash");
       setTags((params.tags as string) || "");
-      setIsRecurring(params.is_recurring === "1");
-      setUseLimit(params.use_limit !== "0"); // default true if undefined
+      setIsRecurring(params.is_recurring === "1" || params.is_recurring === "true");
+      setUseLimit(params.use_limit !== "0" && params.use_limit !== "false");
+      
+      if (params.created_at) {
+        setTransactionDate(new Date(params.created_at as string));
+      }
+
+      // If we only have the ID but no data (title), fetch it from DB
+      if (expenseId && !params.title) {
+        fetchTransactionDetails(expenseId);
+      }
     }
-  }, [params.id]);
+  }, [params.id, params.editId]);
+
+  const fetchTransactionDetails = async (id: string) => {
+    try {
+      setFetchingData(true);
+      let data = null;
+
+      // 1. Try API if user is logged in
+      if (user) {
+        try {
+          const response = await api.get(`/transactions/${id}`);
+          if (response.data && response.data.data) {
+            data = response.data.data;
+          }
+        } catch (apiErr) {
+          console.warn("API fetch detail failed, trying local...");
+        }
+      }
+
+      // 2. Try Local DB if API failed or not logged in
+      if (!data) {
+        data = await db.getFirstAsync<any>(
+          "SELECT * FROM transactions WHERE id = ?;",
+          [id]
+        );
+      }
+      
+      if (data) {
+        setTitle(data.title);
+        setAmount(data.amount.toString());
+        setType(data.type);
+        setPaymentMode(data.payment_mode || "cash");
+        setTags(data.tags || "");
+        setIsRecurring(data.is_recurring === 1 || data.is_recurring === true);
+        setUseLimit(data.use_limit !== 0 && data.use_limit !== false);
+        setTransactionDate(new Date(data.created_at));
+        
+        // Handle Category
+        const initialCat = data.category;
+        const matchedCat = (data.type === "expense" ? CATEGORIES : INCOME_CATEGORIES).find(c => c.id === initialCat);
+        if (!matchedCat && initialCat && initialCat.startsWith("Others - ")) {
+          setCategory("others");
+          setCustomCategory(initialCat.replace("Others - ", ""));
+        } else if (!matchedCat && initialCat && initialCat !== "others") {
+          setCategory("others");
+          setCustomCategory(initialCat);
+        } else {
+          setCategory(initialCat || "others");
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch transaction details:", err);
+    } finally {
+      setFetchingData(false);
+    }
+  };
 
   const checkBudgetLimit = async () => {
     try {
@@ -162,6 +227,7 @@ export default function AddExpenseScreen() {
         tags,
         is_recurring: isRecurring,
         useLimit: useLimit,
+        created_at: transactionDate.toISOString(),
       };
 
       // 1. Save to Backend (Primary)
@@ -169,18 +235,28 @@ export default function AddExpenseScreen() {
         if (expenseId) {
           await api.put(`/transactions/${expenseId}`, expenseData);
         } else {
-          await api.post(`/transactions`, { ...expenseData, created_at: transactionDate.toISOString() });
+          await api.post(`/transactions`, expenseData);
         }
       }
 
       // 2. Save to Local DB (Parallel for Offline Support/Speed) 
       try {
-        if (expenseId && !isNaN(Number(expenseId))) {
-          await db.runAsync(
-            "UPDATE transactions SET title=?, amount=?, type=?, category=?, payment_mode=?, tags=?, is_recurring=?, use_limit=?, updated_at=? WHERE id=?;",
-            [title, parseFloat(amount), type, finalCategory, paymentMode, tags, isRecurring ? 1 : 0, useLimit ? 1 : 0, now(), Number(expenseId)],
-          );
-        } else if (!expenseId) {
+        const isRemoteId = isNaN(Number(expenseId));
+        if (expenseId) {
+          if (isRemoteId) {
+            // Update by remote_id if it's a string
+            await db.runAsync(
+              "UPDATE transactions SET title=?, amount=?, type=?, category=?, payment_mode=?, tags=?, is_recurring=?, use_limit=?, created_at=?, updated_at=? WHERE remote_id=? OR id=?;",
+              [title, parseFloat(amount), type, finalCategory, paymentMode, tags, isRecurring ? 1 : 0, useLimit ? 1 : 0, transactionDate.toISOString(), now(), expenseId, expenseId],
+            );
+          } else {
+            // Update by local id if it's a number
+            await db.runAsync(
+              "UPDATE transactions SET title=?, amount=?, type=?, category=?, payment_mode=?, tags=?, is_recurring=?, use_limit=?, created_at=?, updated_at=? WHERE id=?;",
+              [title, parseFloat(amount), type, finalCategory, paymentMode, tags, isRecurring ? 1 : 0, useLimit ? 1 : 0, transactionDate.toISOString(), now(), Number(expenseId)],
+            );
+          }
+        } else {
           await db.runAsync(
             "INSERT INTO transactions (title, amount, type, category, payment_mode, tags, is_recurring, use_limit, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
             [title, parseFloat(amount), type, finalCategory, paymentMode, tags, isRecurring ? 1 : 0, useLimit ? 1 : 0, transactionDate.toISOString(), now()],
