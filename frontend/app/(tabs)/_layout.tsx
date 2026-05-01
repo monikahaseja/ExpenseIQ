@@ -68,7 +68,7 @@ export default function TabLayout() {
           tabBarIcon: ({ focused }) => (
             <View style={{ alignItems: 'center', justifyContent: 'center', backgroundColor: focused ? theme.primaryBg : 'transparent', width: 64, height: 50, borderRadius: 10 }}>
                <Ionicons name="pie-chart" size={24} color={focused ? theme.primary : theme.tabIconDefault} />
-               <Text numberOfLines={1} style={{ color: focused ? theme.primary : theme.tabIconDefault, fontSize: 10, fontWeight: 'bold', marginTop: 2 }}>Stats</Text>
+               <Text numberOfLines={1} style={{ color: focused ? theme.primary : theme.tabIconDefault, fontSize: 10, fontWeight: 'bold', marginTop: 2 }}>Analytics</Text>
             </View>
           ),
           headerShown: false,

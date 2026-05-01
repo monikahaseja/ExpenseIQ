@@ -28,8 +28,9 @@ export default function AnalyticsScreen() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [tempDate, setTempDate] = useState(new Date());
   const [showPicker, setShowPicker] = useState(false);
-  const [timeframe, setTimeframe] = useState<"Days" | "Months" | "Years">("Days");
+  const [timeframe, setTimeframe] = useState<"Days" | "Weeks" | "Months" | "Years">("Days");
   const [showDropdown, setShowDropdown] = useState(false);
+
 
   const fetchMonthData = async () => {
     if (authLoading || !token) return;
@@ -37,7 +38,7 @@ export default function AnalyticsScreen() {
       const year = currentDate.getFullYear();
       let url = `${API_URL}/analytics`;
       
-      if (timeframe === "Days") {
+      if (timeframe === "Days" || timeframe === "Weeks") {
           const month = (currentDate.getMonth() + 1).toString().padStart(2, "0");
           url += `?month=${year}-${month}`;
       } else if (timeframe === "Months") {
@@ -99,7 +100,16 @@ export default function AnalyticsScreen() {
             const day = new Date(e.created_at).getDay();
             data[day] += e.amount;
         });
+    } else if (timeframe === "Weeks") {
+        labels = ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5'];
+        data = new Array(5).fill(0);
+        spending.forEach(e => {
+            const d = new Date(e.created_at).getDate();
+            const weekIndex = Math.floor((d - 1) / 7);
+            if (weekIndex < 5) data[weekIndex] += e.amount;
+        });
     } else if (timeframe === "Months") {
+
         labels = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
         data = new Array(12).fill(0);
         spending.forEach(e => {
@@ -251,9 +261,10 @@ export default function AnalyticsScreen() {
     const d = new Date(currentDate);
     if (timeframe === "Months") {
         d.setFullYear(d.getFullYear() + dir);
-    } else if (timeframe === "Days") {
+    } else if (timeframe === "Days" || timeframe === "Weeks") {
         d.setMonth(d.getMonth() + dir);
     }
+
     setCurrentDate(d);
   };
 
@@ -300,7 +311,7 @@ export default function AnalyticsScreen() {
       </View>
 
       <View className="mx-4 mb-4 rounded-3xl p-1 shadow-sm border flex-row justify-around" style={{ backgroundColor: theme.card, borderColor: theme.border }}>
-          {["Days", "Months", "Years"].map(tf => (
+          {["Days", "Weeks", "Months", "Years"].map(tf => (
               <TouchableOpacity 
                 key={tf} 
                 onPress={() => setTimeframe(tf as any)} 

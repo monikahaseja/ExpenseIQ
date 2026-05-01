@@ -22,7 +22,7 @@ export default function HelpCenterScreen() {
 
   const contactOptions = [
     { icon: 'mail-outline', label: 'Email Support', value: 'support@expenseiq.app', onPress: () => Linking.openURL('mailto:support@expenseiq.app') },
-    { icon: 'chatbubble-outline', label: 'Live Chat', value: 'Available 9 AM - 6 PM IST', onPress: () => {} },
+    { icon: 'chatbubble-outline', label: 'Live Chat', value: 'Available 9 AM - 6 PM IST', onPress: () => Linking.openURL('https://wa.me/919876543210/?text=Hello%2C%20I%20need%20help%20with%20ExpenseIQ') },
     { icon: 'call-outline', label: 'Phone', value: '+91 98765 43210', onPress: () => Linking.openURL('tel:+919876543210') },
   ];
 

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Alert, RefreshControl, FlatList, KeyboardAvoidingView, Platform, TextInput, Modal, StyleSheet, ActivityIndicator, Image } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Alert, RefreshControl, SectionList, KeyboardAvoidingView, Platform, TextInput, Modal, StyleSheet, ActivityIndicator, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
@@ -12,6 +12,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import api from "../../utils/api";
+import { CATEGORIES, INCOME_CATEGORIES } from "../../constants/categories";
 
 export default function HomeScreen() {
   const { user, token, isLoading: authLoading } = useAuth();
@@ -27,6 +28,7 @@ export default function HomeScreen() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState("all");
 
   const fetchExpenses = async () => {
     if (authLoading) return;
@@ -46,7 +48,7 @@ export default function HomeScreen() {
         } catch (e) {
           console.warn("API fetch failed, falling back to local storage");
           rows = await db.getAllAsync<Expense>(
-            "SELECT * FROM transactions WHERE strftime('%Y-%m', created_at) = ? OR created_at LIKE ? ORDER BY id DESC;",
+            "SELECT * FROM transactions WHERE strftime('%Y-%m', created_at) = ? OR created_at LIKE ? ORDER BY created_at DESC, id DESC;",
             [monthStr, `${monthStr}%`],
           );
         } finally {
@@ -54,47 +56,15 @@ export default function HomeScreen() {
         }
       } else {
         rows = await db.getAllAsync<Expense>(
-          "SELECT * FROM transactions WHERE strftime('%Y-%m', created_at) = ? OR created_at LIKE ? ORDER BY id DESC;",
+          "SELECT * FROM transactions WHERE strftime('%Y-%m', created_at) = ? OR created_at LIKE ? ORDER BY created_at DESC, id DESC;",
           [monthStr, `${monthStr}%`],
         );
       }
       
       setExpenses(rows);
 
-      // Recursive Logic (Suggested from last month)
-      const lastMonth = new Date(currentDate);
-      lastMonth.setMonth(lastMonth.getMonth() - 1);
-      const lastMonthStr = `${lastMonth.getFullYear()}-${(lastMonth.getMonth() + 1).toString().padStart(2, "0")}`;
-      
-      const recurringRows = await db.getAllAsync<Expense>(
-          "SELECT * FROM transactions WHERE is_recurring = 1 AND (strftime('%Y-%m', created_at) = ? OR created_at LIKE ?);",
-          [lastMonthStr, `${lastMonthStr}%`]
-      );
-
-      if (recurringRows.length > 0 && rows.length > 0) {
-          const alreadyAddedTitles = new Set(rows.map(r => r.title));
-          const toSuggest = recurringRows.filter(r => !alreadyAddedTitles.has(r.title));
-          
-          if (toSuggest.length > 0) {
-              Alert.alert(
-                  "Recurring transactions",
-                  `Found ${toSuggest.length} recurring transactions from last month. Would you like to add them for ${formattedMonth}?`,
-                  [
-                      { text: "No", style: "cancel" },
-                      { text: "Yes", onPress: async () => {
-                          for (const rs of toSuggest) {
-                              await db.runAsync(
-                                  "INSERT INTO transactions (title, amount, type, category, payment_mode, tags, is_recurring, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                                  [rs.title, rs.amount, rs.type, rs.category || 'others', rs.payment_mode || 'cash', rs.tags || '', 1, new Date().toISOString(), new Date().toISOString()]
-                              );
-                          }
-                          fetchExpenses();
-                          showNotification(`Added ${toSuggest.length} recurring transactions`, "success");
-                      }}
-                  ]
-              );
-          }
-      }
+      const count = await getUnreadCount();
+      setUnreadCount(count);
 
       let titleToSet = "💰ExpenseIQ";
       if (token) {
@@ -108,9 +78,6 @@ export default function HomeScreen() {
         }
       }
       setAppTitle(titleToSet);
-
-      const count = await getUnreadCount();
-      setUnreadCount(count);
     } catch (e) {
       console.error("Error fetching expenses:", e);
     }
@@ -124,27 +91,64 @@ export default function HomeScreen() {
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchExpenses().finally(() => setRefreshing(refreshing));
-    setTimeout(() => setRefreshing(false), 1000);
+    fetchExpenses().finally(() => setRefreshing(false));
   }, [currentDate, token]);
 
-  const changeMonth = (direction: number) => {
-    const newDate = new Date(currentDate);
-    newDate.setMonth(newDate.getMonth() + direction);
-    setCurrentDate(newDate);
-  };
-
   const filteredExpenses = useMemo(() => {
-    if (!search.trim()) return expenses;
-    return expenses.filter(
-      (e) =>
-        e.title.toLowerCase().includes(search.toLowerCase()) ||
-        e.amount.toString().includes(search),
-    );
-  }, [expenses, search]);
+    let result = expenses;
+    if (selectedCategory !== "all") {
+      if (selectedCategory === "others") {
+        result = result.filter(e => e.category === "others" || (e.category && e.category.startsWith("Others - ")));
+      } else {
+        result = result.filter(e => e.category === selectedCategory);
+      }
+    }
+    if (search.trim()) {
+      result = result.filter(
+        (e) =>
+          e.title.toLowerCase().includes(search.toLowerCase()) ||
+          e.amount.toString().includes(search),
+      );
+    }
+    return result;
+  }, [expenses, search, selectedCategory]);
+
+  const groupedExpenses = useMemo(() => {
+    const groups: { [key: string]: Expense[] } = {};
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    filteredExpenses.forEach(exp => {
+      const expDate = new Date(exp.created_at);
+      expDate.setHours(0, 0, 0, 0);
+      
+      let dateKey: string;
+      if (expDate.getTime() === today.getTime()) {
+        dateKey = "TODAY";
+      } else if (expDate.getTime() === yesterday.getTime()) {
+        dateKey = "YESTERDAY";
+      } else {
+        // Format: 10 SEP, 20
+        const day = expDate.getDate().toString().padStart(2, '0');
+        const month = expDate.toLocaleString('default', { month: 'short' }).toUpperCase();
+        const year = expDate.getFullYear().toString().slice(-2);
+        dateKey = `${day} ${month}, ${year}`;
+      }
+      
+      if (!groups[dateKey]) groups[dateKey] = [];
+      groups[dateKey].push(exp);
+    });
+
+    return Object.keys(groups).map(date => ({
+      title: date,
+      data: groups[date]
+    }));
+  }, [filteredExpenses]);
 
   const { balance, totalIncome, totalExpenses } = useMemo(() => {
-    return filteredExpenses.reduce(
+    return expenses.reduce(
       (acc, e) => {
         if (e.type === "income") {
           acc.totalIncome += e.amount;
@@ -157,10 +161,10 @@ export default function HomeScreen() {
       },
       { balance: 0, totalIncome: 0, totalExpenses: 0 },
     );
-  }, [filteredExpenses]);
+  }, [expenses]);
 
   const deleteExpense = (id: string | number) => {
-    Alert.alert("Delete Expense", "Are you sure?", [
+    Alert.alert("Delete Transaction", "Are you sure you want to delete this?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
@@ -175,7 +179,7 @@ export default function HomeScreen() {
           }
           await db.runAsync("DELETE FROM transactions WHERE id=?;", [id]);
           fetchExpenses();
-          showNotification("Expense deleted successfully", "success");
+          showNotification("Deleted successfully", "success");
         },
       },
     ]);
@@ -262,6 +266,44 @@ export default function HomeScreen() {
             </View>
           </View>
 
+          {/* Category Filter Card */}
+          <View style={[styles.categoryCard, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]}>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false} 
+              contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}
+            >
+              <TouchableOpacity 
+                onPress={() => setSelectedCategory("all")}
+                style={styles.categoryItem}
+              >
+                <View style={[
+                  styles.categoryIcon, 
+                  { backgroundColor: selectedCategory === "all" ? theme.primary : theme.primaryBg, borderColor: theme.border, borderWidth: 1 }
+                ]}>
+                  <Ionicons name="layers" size={20} color={selectedCategory === "all" ? "#fff" : theme.primary} />
+                </View>
+                <Text style={[styles.categoryLabel, { color: selectedCategory === "all" ? theme.primary : theme.gray }]}>All</Text>
+              </TouchableOpacity>
+
+              {CATEGORIES.map(cat => (
+                <TouchableOpacity 
+                  key={cat.id} 
+                  onPress={() => setSelectedCategory(cat.id)}
+                  style={styles.categoryItem}
+                >
+                  <View style={[
+                    styles.categoryIcon, 
+                    { backgroundColor: selectedCategory === cat.id ? theme.primary : theme.primaryBg, borderColor: theme.border, borderWidth: 1 }
+                  ]}>
+                    <Ionicons name={cat.icon as any} size={20} color={selectedCategory === cat.id ? "#fff" : theme.primary} />
+                  </View>
+                  <Text style={[styles.categoryLabel, { color: selectedCategory === cat.id ? theme.primary : theme.gray }]}>{cat.name.split(' ')[0]}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
           {/* Search & Actions */}
           <View style={styles.searchRow}>
             <View style={[styles.searchBar, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -289,13 +331,14 @@ export default function HomeScreen() {
                <View style={styles.emptyContainer}>
                  <ActivityIndicator size="large" color={theme.primary} />
                </View>
-            ) : filteredExpenses.length > 0 ? (
-              <FlatList
-                data={filteredExpenses}
+            ) : groupedExpenses.length > 0 ? (
+              <SectionList
+                sections={groupedExpenses}
                 keyExtractor={(item) => item.id.toString()}
                 renderItem={({ item }) => (
                   <ExpenseItem 
                     item={item} 
+                    showDate={false}
                     onDelete={deleteExpense} 
                     onEdit={(e) => router.push({ pathname: "/add-expense", params: { editId: e.id } })}
                     onPress={(e) => router.push({ 
@@ -315,6 +358,12 @@ export default function HomeScreen() {
                     })}
                   />
                 )}
+                renderSectionHeader={({ section: { title } }) => (
+                  <View style={[styles.sectionHeader, { backgroundColor: theme.background }]}>
+                    <Text style={[styles.sectionHeaderText, { color: theme.gray }]}>{title}</Text>
+                  </View>
+                )}
+                stickySectionHeadersEnabled={false}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.listContent}
                 refreshControl={
@@ -325,12 +374,15 @@ export default function HomeScreen() {
               <View style={styles.emptyContainer}>
                 <Ionicons name="receipt-outline" size={64} color={theme.lightGray} />
                 <Text style={[styles.emptyText, { color: theme.gray }]}>No transactions found</Text>
-                <TouchableOpacity 
-                   onPress={() => router.push("/add-expense")}
-                   style={[styles.emptyAddBtn, { borderColor: theme.primary }]}
-                >
-                  <Text style={{ color: theme.primary, fontWeight: 'bold' }}>Add Your First Item</Text>
-                </TouchableOpacity>
+                
+                <View style={{ flexDirection: 'row', gap: 12, marginTop: 24 }}>
+                  <TouchableOpacity 
+                    onPress={() => router.push("/add-expense")}
+                    style={[styles.emptyAddBtn, { borderColor: theme.primary }]}
+                  >
+                    <Text style={{ color: theme.primary, fontWeight: 'bold' }}>Add Entry</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             )}
           </View>
@@ -418,45 +470,51 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   flex1: { flex: 1 },
-  header: { padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  headerAvatar: { width: 50, height: 50, borderRadius: 30, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  header: { paddingHorizontal: 16, paddingVertical: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerAvatar: { width: 45, height: 45, borderRadius: 25, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   avatarImg: { width: '100%', height: '100%' },
   avatarInitial: { fontSize: 16, fontWeight: 'bold' },
-  headerTitle: { fontSize: 20, fontWeight: 'bold' },
+  headerTitle: { fontSize: 18, fontWeight: 'bold' },
   notificationBtn: { position: 'relative', padding: 8 },
-  unreadBadge: { position: 'absolute', right: 4, top: 4, minWidth: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'white' },
-  unreadText: { color: 'white', fontSize: 9, fontWeight: 'bold' },
-  balanceCard: { margin: 16, padding: 24, borderRadius: 32, borderWidth: 1, shadowOpacity: 0.1, shadowRadius: 10, elevation: 4 },
-  balanceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  balanceLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.2 },
+  unreadBadge: { position: 'absolute', right: 4, top: 4, minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'white' },
+  unreadText: { color: 'white', fontSize: 8, fontWeight: 'bold' },
+  balanceCard: { marginHorizontal: 16, marginTop: 8, marginBottom: 16, padding: 20, borderRadius: 24, borderWidth: 1, shadowOpacity: 0.1, shadowRadius: 10, elevation: 4 },
+  balanceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  balanceLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 1 },
   datePickerBtn: { flexDirection: 'row', alignItems: 'center' },
-  monthLabel: { fontSize: 13, fontWeight: 'bold', marginRight: 4 },
-  balanceVal: { fontSize: 36, fontWeight: '800', marginBottom: 24 },
+  monthLabel: { fontSize: 12, fontWeight: 'bold', marginRight: 4 },
+  balanceVal: { fontSize: 32, fontWeight: '800', marginBottom: 16 },
   statsRow: { flexDirection: 'row', alignItems: 'center' },
   statItem: { flex: 1, flexDirection: 'row', alignItems: 'center' },
-  statIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  statLabel: { fontSize: 10, fontWeight: 'bold' },
-  incomeVal: { fontSize: 16, fontWeight: 'bold' },
-  expenseVal: { fontSize: 16, fontWeight: 'bold' },
-  vDivider: { width: 1, height: 40, marginHorizontal: 20 },
-  searchRow: { flexDirection: 'row', paddingHorizontal: 16, marginBottom: 24, gap: 12 },
-  searchBar: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, borderRadius: 20, borderWidth: 1 },
-  searchInput: { flex: 1, height: 50, marginLeft: 12, fontSize: 15, fontWeight: '500' },
-  addBtn: { width: 50, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center', elevation: 5, shadowOpacity: 0.3, shadowRadius: 5 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', marginHorizontal: 16, marginBottom: 12 },
+  statIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 8 },
+  statLabel: { fontSize: 9, fontWeight: 'bold' },
+  incomeVal: { fontSize: 14, fontWeight: 'bold' },
+  expenseVal: { fontSize: 14, fontWeight: 'bold' },
+  vDivider: { width: 1, height: 30, marginHorizontal: 12 },
+  categoryCard: { marginHorizontal: 16, marginBottom: 16, paddingVertical: 12, borderRadius: 24, shadowOpacity: 0.05, shadowRadius: 5, elevation: 2 },
+  categoryItem: { alignItems: 'center', width: 64 },
+  categoryIcon: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
+  categoryLabel: { fontSize: 10, fontWeight: '700' },
+  searchRow: { flexDirection: 'row', paddingHorizontal: 16, marginBottom: 16, gap: 10 },
+  searchBar: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, borderRadius: 16, borderWidth: 1 },
+  searchInput: { flex: 1, height: 45, marginLeft: 8, fontSize: 14, fontWeight: '500' },
+  addBtn: { width: 45, height: 45, borderRadius: 22.5, alignItems: 'center', justifyContent: 'center', elevation: 3, shadowOpacity: 0.2, shadowRadius: 3 },
+  sectionTitle: { fontSize: 16, fontWeight: 'bold', marginHorizontal: 16, marginBottom: 8 },
+  sectionHeader: { paddingHorizontal: 16, paddingVertical: 10, marginTop: 8 },
+  sectionHeaderText: { fontSize: 11, fontWeight: 'bold', letterSpacing: 0.5 },
   listContent: { paddingHorizontal: 16, paddingBottom: 100 },
-  emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
-  emptyText: { marginTop: 16, fontSize: 15, fontWeight: '500' },
-  emptyAddBtn: { marginTop: 24, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 16, borderWidth: 1.5 },
+  emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 40 },
+  emptyText: { marginTop: 12, fontSize: 14, fontWeight: '500' },
+  emptyAddBtn: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 12, borderWidth: 1.5 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalContent: { width: '100%', padding: 28, borderRadius: 36, borderWidth: 1 },
-  modalTitle: { fontSize: 22, fontWeight: 'bold', marginBottom: 24, textAlign: 'center' },
-  pickerRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 32 },
+  modalContent: { width: '100%', padding: 24, borderRadius: 32, borderWidth: 1 },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
+  pickerRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 },
   pickerCol: { flex: 1, marginHorizontal: 8 },
-  pickerLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginBottom: 16, textAlign: 'center' },
-  pickerScroll: { maxHeight: 180 },
-  pickerItem: { paddingVertical: 12, borderRadius: 16, marginBottom: 4 },
-  pickerItemText: { textAlign: 'center', fontSize: 15 },
+  pickerLabel: { fontSize: 9, fontWeight: '900', letterSpacing: 1.2, marginBottom: 12, textAlign: 'center' },
+  pickerScroll: { maxHeight: 150 },
+  pickerItem: { paddingVertical: 10, borderRadius: 12, marginBottom: 4 },
+  pickerItemText: { textAlign: 'center', fontSize: 14 },
   modalActions: { flexDirection: 'row', gap: 12 },
-  modalBtn: { flex: 1, padding: 16, borderRadius: 20, alignItems: 'center' },
+  modalBtn: { flex: 1, padding: 14, borderRadius: 16, alignItems: 'center' },
 });

@@ -24,9 +24,10 @@ interface Props {
   onEdit: (item: Expense) => void;
   onDelete: (id: string | number) => void;
   onPress?: (item: Expense) => void;
+  showDate?: boolean;
 }
 
-export default function ExpenseItem({ item, onEdit, onDelete, onPress }: Props) {
+export default function ExpenseItem({ item, onEdit, onDelete, onPress, showDate = true }: Props) {
   const { theme } = useTheme();
   const isIncome = item.type === 'income';
   const knownCategory = isIncome 
@@ -64,9 +65,11 @@ export default function ExpenseItem({ item, onEdit, onDelete, onPress }: Props) 
                 {categoryName}
               </Text>
             )}
-            <Text className="text-xs flex-shrink-0" style={{ color: theme.gray }}>
-              {new Date(item.created_at).toLocaleDateString()}
-            </Text>
+            {showDate && (
+              <Text className="text-xs flex-shrink-0" style={{ color: theme.gray }}>
+                {new Date(item.created_at).toLocaleDateString()}
+              </Text>
+            )}
           </View>
           {item.tags ? (
             <View className="flex-row flex-wrap mt-1">
@@ -107,5 +110,5 @@ export default function ExpenseItem({ item, onEdit, onDelete, onPress }: Props) 
         </View>
       </View>
     </TouchableOpacity>
-);
+  );
 }

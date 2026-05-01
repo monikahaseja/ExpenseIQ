@@ -111,7 +111,8 @@ export default function AddExpenseScreen() {
     if (category !== "others") return; 
     const t = text.toLowerCase();
     if (t.includes("food") || t.includes("eat") || t.includes("restaurant") || t.includes("grocery") || t.includes("dinner") || t.includes("lunch")) setCategory("food");
-    else if (t.includes("uber") || t.includes("ola") || t.includes("petrol") || t.includes("fuel") || t.includes("bus") || t.includes("train") || t.includes("travel")) setCategory("transport");
+    else if (t.includes("uber") || t.includes("ola") || t.includes("bus") || t.includes("train") || t.includes("travel")) setCategory("transport");
+    else if (t.includes("petrol") || t.includes("fuel") || t.includes("diesel") || t.includes("cng") || t.includes("gasoline")) setCategory("fuel");
     else if (t.includes("amazon") || t.includes("flipkart") || t.includes("shop") || t.includes("cloth") || t.includes("mall")) setCategory("shopping");
     else if (t.includes("movie") || t.includes("netflix") || t.includes("game") || t.includes("party")) setCategory("entertainment");
     else if (t.includes("doctor") || t.includes("med") || t.includes("hospital") || t.includes("health")) setCategory("health");

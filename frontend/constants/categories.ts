@@ -8,6 +8,7 @@ export interface Category {
 export const CATEGORIES: Category[] = [
   { id: "food", name: "Food & Drinks", icon: "fast-food", color: "#f87171" },
   { id: "transport", name: "Transport", icon: "car", color: "#60a5fa" },
+  { id: "fuel", name: "Fuel", icon: "speedometer", color: "#f59e0b" },
   { id: "shopping", name: "Shopping", icon: "cart", color: "#f472b6" },
   { id: "entertainment", name: "Entertainment", icon: "game-controller", color: "#a78bfa" },
   { id: "health", name: "Health", icon: "medical", color: "#4ade80" },
