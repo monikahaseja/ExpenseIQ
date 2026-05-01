@@ -19,7 +19,6 @@ export default function RateAppScreen() {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [avgRating, setAvgRating] = useState('0');
-  const [totalRatings, setTotalRatings] = useState(0);
 
   useEffect(() => {
     fetchExistingRating();
@@ -41,7 +40,6 @@ export default function RateAppScreen() {
     try {
       const res = await api.get('/ratings/stats');
       setAvgRating(res.data.data.avgRating);
-      setTotalRatings(res.data.data.totalRatings);
     } catch (e) { /* ignore */ }
   };
 
