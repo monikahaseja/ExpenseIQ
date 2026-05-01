@@ -77,6 +77,7 @@ export const initDB = async () => {
   await db.execAsync(`
     CREATE TABLE IF NOT EXISTS notifications (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT,
       message TEXT,
       type TEXT DEFAULT 'info',
       is_read INTEGER DEFAULT 0,
@@ -97,12 +98,14 @@ export const initDB = async () => {
     );
   `);
 
-  // Migration: add is_read column if it doesn't exist
+  // Migration: add is_read and user_id columns if they don't exist
   try {
     await db.execAsync("ALTER TABLE notifications ADD COLUMN is_read INTEGER DEFAULT 0;");
-  } catch (e) {
-    // Column likely already exists
-  }
+  } catch (e) {}
+
+  try {
+    await db.execAsync("ALTER TABLE notifications ADD COLUMN user_id TEXT;");
+  } catch (e) {}
 };
 
 export const getSetting = async (key: string): Promise<string | null> => {
@@ -153,22 +156,23 @@ export interface NotificationRecord {
   created_at: string;
 }
 
-export const saveNotification = async (message: string, type: string) => {
+export const saveNotification = async (message: string, type: string, userId: string | null) => {
   try {
     const now = new Date().toISOString();
     await db.runAsync(
-      "INSERT INTO notifications (message, type, is_read, created_at) VALUES (?, ?, 0, ?);",
-      [message, type, now],
+      "INSERT INTO notifications (message, type, is_read, created_at, user_id) VALUES (?, ?, 0, ?, ?);",
+      [message, type, now, userId],
     );
   } catch (e) {
     console.error("Error saving notification:", e);
   }
 };
 
-export const getNotifications = async (): Promise<NotificationRecord[]> => {
+export const getNotifications = async (userId: string | null): Promise<NotificationRecord[]> => {
   try {
     return await db.getAllAsync<NotificationRecord>(
-      "SELECT * FROM notifications ORDER BY id DESC;",
+      "SELECT * FROM notifications WHERE user_id = ? ORDER BY id DESC;",
+      [userId]
     );
   } catch (e) {
     return [];
@@ -183,18 +187,19 @@ export const deleteNotification = async (id: number) => {
   }
 };
 
-export const clearAllNotifications = async () => {
+export const clearAllNotifications = async (userId: string | null) => {
   try {
-    await db.runAsync("DELETE FROM notifications;");
+    await db.runAsync("DELETE FROM notifications WHERE user_id = ?;", [userId]);
   } catch (e) {
     console.error("Error clearing notifications:", e);
   }
 };
 
-export const getUnreadCount = async (): Promise<number> => {
+export const getUnreadCount = async (userId: string | null): Promise<number> => {
   try {
     const result = await db.getFirstAsync<{ count: number }>(
-      "SELECT COUNT(*) as count FROM notifications WHERE is_read = 0;",
+      "SELECT COUNT(*) as count FROM notifications WHERE is_read = 0 AND user_id = ?;",
+      [userId]
     );
     return result ? result.count : 0;
   } catch (e) {
@@ -210,9 +215,9 @@ export const markAsRead = async (id: number) => {
   }
 };
 
-export const markAllAsRead = async () => {
+export const markAllAsRead = async (userId: string | null) => {
   try {
-    await db.runAsync("UPDATE notifications SET is_read = 1;");
+    await db.runAsync("UPDATE notifications SET is_read = 1 WHERE user_id = ?;", [userId]);
   } catch (e) {
     console.error("Error marking all notifications as read:", e);
   }

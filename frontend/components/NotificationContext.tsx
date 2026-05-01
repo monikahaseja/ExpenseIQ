@@ -111,7 +111,7 @@ export function NotificationProvider({
     });
   }, [translateY, opacity]);
 
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   
   const showNotification = useCallback(
     (
@@ -124,8 +124,8 @@ export function NotificationProvider({
         clearTimeout(timeoutRef.current);
       }
 
-      // Persist to local DB
-      saveNotification(message, type);
+      // Persist to local DB with user ID
+      saveNotification(message, type, user?.id || null);
 
       // Reset position
       translateY.setValue(-120);

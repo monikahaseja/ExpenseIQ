@@ -1,15 +1,46 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { Tabs } from "expo-router";
+import { Tabs, Redirect } from "expo-router";
 import { useColorScheme } from "nativewind";
-import { Platform, View, Text } from "react-native";
+import { Platform, View, Text, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors } from "../../constants/colors";
 import { useTheme } from "../../context/ThemeContext";
+import { useAuth } from "../../context/AuthContext";
+import * as SecureStore from "expo-secure-store";
+import React, { useEffect, useState } from "react";
 
 export default function TabLayout() {
   const { theme } = useTheme();
+  const { user, isLoading: authLoading } = useAuth();
+  const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean | null>(null);
   const isDark = theme.background === "#000000" || theme.background === "#020617" || theme.background === "#0F0F17";
   const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    const checkOnboarding = async () => {
+      if (!user) return;
+      try {
+        const key = `hasSeenOnboarding_${user.id}`;
+        const value = await SecureStore.getItemAsync(key);
+        setHasSeenOnboarding(value === 'true');
+      } catch (e) {
+        setHasSeenOnboarding(false);
+      }
+    };
+    checkOnboarding();
+  }, [user]);
+
+  if (authLoading || hasSeenOnboarding === null) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.background }}>
+        <ActivityIndicator size="large" color={theme.primary} />
+      </View>
+    );
+  }
+
+  if (user && !hasSeenOnboarding) {
+    return <Redirect href={"/onboarding" as any} />;
+  }
 
   return (
     <Tabs

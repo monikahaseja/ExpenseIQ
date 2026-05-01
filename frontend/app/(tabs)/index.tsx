@@ -63,7 +63,7 @@ export default function HomeScreen() {
       
       setExpenses(rows);
 
-      const count = await getUnreadCount();
+      const count = await getUnreadCount(user?.id || null);
       setUnreadCount(count);
 
       let titleToSet = "💰ExpenseIQ";

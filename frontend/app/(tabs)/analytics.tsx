@@ -15,6 +15,7 @@ import { API_URL } from "../../constants/api";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import api from "../../utils/api";
+import Svg, { G, Circle, Text as SvgText } from "react-native-svg";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -84,7 +85,7 @@ export default function AnalyticsScreen() {
     }).sort((a, b) => b.population - a.population);
 
     return chartData.length > 0 ? chartData : [
-      { name: "No Data", population: 1, color: "#ccc", legendFontColor: "#999", legendFontSize: 12 }
+      { name: "No Data", population: 0, color: "#ccc", legendFontColor: "#999", legendFontSize: 12 }
     ];
   }, [expenses, isDark]);
 
@@ -326,16 +327,115 @@ export default function AnalyticsScreen() {
       {/* Category Breakdown */}
       <View className="mx-4 mb-4 rounded-3xl p-4 shadow-sm border" style={{ backgroundColor: theme.card, borderColor: theme.border }}>
         <Text className="text-lg font-bold mb-4" style={{ color: theme.text }}>Category Breakdown</Text>
-        <PieChart
-          data={categoryData}
-          width={screenWidth - 64}
-          height={220}
-          chartConfig={chartConfig}
-          accessor={"population"}
-          backgroundColor={"transparent"}
-          paddingLeft={"15"}
-          absolute
-        />
+        <View className="flex-row items-center justify-between">
+          {/* Donut Chart with Center Label */}
+          <View style={{ width: 160, height: 160, alignItems: 'center', justifyContent: 'center' }}>
+            {(() => {
+              const total = categoryData.reduce((sum, item) => item.name === "No Data" ? 0 : sum + item.population, 0);
+              const radius = 55;
+              const strokeWidth = 30;
+              const circumference = 2 * Math.PI * radius;
+              let startAngle = 0;
+
+              return (
+                <View style={{ width: 160, height: 160, alignItems: 'center', justifyContent: 'center' }}>
+                  <Svg width={160} height={160} viewBox="0 0 160 160">
+                    {/* Background Placeholder Circle */}
+                    <Circle
+                      cx="80"
+                      cy="80"
+                      r={radius}
+                      stroke={isDark ? "#1e293b" : "#f1f5f9"}
+                      strokeWidth={strokeWidth}
+                      fill="transparent"
+                    />
+                    <G rotation="-90" origin="80, 80">
+                      {categoryData.map((item, index) => {
+                        const percentage = (item.population / (total || 1)) * 100;
+                        const strokeDashoffset = circumference - (circumference * percentage) / 100;
+                        const rotation = (startAngle / (total || 1)) * 360;
+                        startAngle += item.population;
+                        return (
+                          <Circle
+                            key={index}
+                            cx="80"
+                            cy="80"
+                            r={radius}
+                            stroke={item.color}
+                            strokeWidth={strokeWidth}
+                            fill="transparent"
+                            strokeDasharray={circumference}
+                            strokeDashoffset={strokeDashoffset}
+                            rotation={rotation}
+                            origin="80, 80"
+                          />
+                        );
+                      })}
+                    </G>
+                    {/* Percentage Labels on Segments */}
+                    {(() => {
+                      let currentSum = 0;
+                      return categoryData.map((item, index) => {
+                        const percentage = (item.population / (total || 1)) * 100;
+                        if (percentage < 5 || item.name === "No Data") return null;
+                        const middleAngle = ((currentSum + item.population / 2) / (total || 1)) * 360;
+                        const radian = (middleAngle - 90) * (Math.PI / 180);
+                        const x = 80 + radius * Math.cos(radian);
+                        const y = 80 + radius * Math.sin(radian);
+                        currentSum += item.population;
+                        return (
+                          <SvgText
+                            key={`pct-${index}`}
+                            x={x}
+                            y={y + 3}
+                            textAnchor="middle"
+                            fill="white"
+                            fontSize="8"
+                            fontWeight="bold"
+                          >
+                            {Math.round(percentage)}%
+                          </SvgText>
+                        );
+                      });
+                    })()}
+                  </Svg>
+                  {/* Center Total Label */}
+                  <View style={{ position: 'absolute', alignItems: 'center', justifyContent: 'center' }} pointerEvents="none">
+                    <Text style={{ color: theme.gray, fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase' }}>Total</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Text style={{ color: theme.text, fontSize: 12, fontWeight: '700', marginRight: 1 }}>₹</Text>
+                      <Text style={{ color: theme.text, fontSize: 16, fontWeight: 'bold' }}>
+                        {total > 9999 ? (total / 1000).toFixed(1) + 'k' : total.toLocaleString()}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              );
+            })()}
+          </View>
+
+          {/* Custom Legend */}
+          <View style={{ flex: 1, paddingLeft: 10 }}>
+            {categoryData.slice(0, 6).map((item, index) => (
+              <View key={index} className="flex-row items-center justify-between mb-2">
+                <View className="flex-row items-center flex-1">
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: item.color, marginRight: 6 }} />
+                  <Text numberOfLines={1} style={{ color: theme.text, fontSize: 11, fontWeight: '600' }} className="flex-1">
+                    {item.name}
+                  </Text>
+                </View>
+                <Text style={{ color: theme.gray, fontSize: 10, fontWeight: 'bold' }}>
+                  ₹{item.population > 999 ? (item.population / 1000).toFixed(1) + 'k' : item.population.toFixed(0)}
+                </Text>
+              </View>
+            ))}
+            {categoryData.length > 6 && (
+               <Text style={{ color: theme.gray, fontSize: 9, fontStyle: 'italic', marginLeft: 14 }}>
+                 + {categoryData.length - 6} more
+               </Text>
+            )}
+          </View>
+        </View>
       </View>
 
       {/* Weekly Spending */}

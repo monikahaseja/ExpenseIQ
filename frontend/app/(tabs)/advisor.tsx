@@ -511,7 +511,7 @@ export default function AdvisorScreen() {
                               fontWeight: "600",
                             }}
                           >
-                            Monthly Budget
+                            Monthly Budget - {summary?.budgetLimit.toLocaleString()}
                           </Text>
                           <Text
                             style={{

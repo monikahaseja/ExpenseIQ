@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useTheme } from "../../context/ThemeContext";
+import { useAuth } from "../../context/AuthContext";
 import { 
     getNotifications, 
     deleteNotification, 
@@ -16,15 +17,18 @@ import { COLOR_MAP, ICON_MAP, NotificationType } from "../../components/Notifica
 
 export default function NotificationsScreen() {
     const { theme } = useTheme();
+    const { user } = useAuth();
     const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
 
     const fetchNotifications = async () => {
-        const data = await getNotifications();
+        const userId = user?.id || null;
+        const data = await getNotifications(userId);
         setNotifications(data);
     };
 
     const handleMarkAllAsRead = async () => {
-        await markAllAsRead();
+        const userId = user?.id || null;
+        await markAllAsRead(userId);
         fetchNotifications();
     };
 
@@ -36,7 +40,7 @@ export default function NotificationsScreen() {
     useFocusEffect(
         React.useCallback(() => {
             fetchNotifications();
-        }, [])
+        }, [user])
     );
 
     const handleDelete = (id: number) => {
@@ -61,7 +65,8 @@ export default function NotificationsScreen() {
                 text: "Clear", 
                 style: "destructive", 
                 onPress: async () => {
-                    await clearAllNotifications();
+                    const userId = user?.id || null;
+                    await clearAllNotifications(userId);
                     fetchNotifications();
                 } 
             }

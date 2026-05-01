@@ -42,6 +42,9 @@ export default function SettingsScreen() {
   const [titleError, setTitleError] = useState("");
   const [isSaved, setIsSaved] = useState(false);
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
 
   const getCurrentMonthKey = () => {
@@ -516,15 +519,19 @@ export default function SettingsScreen() {
         {/* Logout */}
         <TouchableOpacity 
           style={[styles.logoutBtn, { borderColor: theme.error }]}
-          onPress={() => {
-            Alert.alert("Logout", "Are you sure you want to logout?", [
-              { text: "Cancel", style: "cancel" },
-              { text: "Logout", onPress: logout, style: "destructive" }
-            ]);
-          }}
+          onPress={() => setLogoutModalVisible(true)}
         >
           <Ionicons name="log-out-outline" size={22} color={theme.error} />
           <Text style={{ color: theme.error, fontSize: 16, fontWeight: 'bold', marginLeft: 10 }}>Log Out</Text>
+        </TouchableOpacity>
+
+        {/* Delete Account */}
+        <TouchableOpacity 
+          style={[styles.deleteAccountBtn, { borderColor: theme.error }]}
+          onPress={() => setDeleteModalVisible(true)}
+        >
+          <Ionicons name="trash-outline" size={20} color={theme.error} />
+          <Text style={{ color: theme.error, fontSize: 14, fontWeight: 'bold', marginLeft: 10 }}>Delete Account Forever</Text>
         </TouchableOpacity>
 
         {/* Change Password Modal */}
@@ -620,6 +627,85 @@ export default function SettingsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Logout Confirmation Modal */}
+      <Modal visible={logoutModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <View style={[styles.modalIconCircle, { backgroundColor: theme.error + '15' }]}>
+              <Ionicons name="log-out" size={32} color={theme.error} />
+            </View>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Confirm Logout</Text>
+            <Text style={[styles.modalSubtitle, { color: theme.gray }]}>Are you sure you want to log out of your account?</Text>
+            
+            <View style={styles.modalActions}>
+              <TouchableOpacity 
+                onPress={() => setLogoutModalVisible(false)}
+                style={[styles.modalActionBtn, { backgroundColor: theme.lightGray }]}
+              >
+                <Text style={{ color: theme.gray, fontWeight: 'bold' }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                onPress={async () => {
+                  setLogoutModalVisible(false);
+                  await logout();
+                }}
+                style={[styles.modalActionBtn, { backgroundColor: theme.error }]}
+              >
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Logout</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Account Confirmation Modal */}
+      <Modal visible={deleteModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <View style={[styles.modalIconCircle, { backgroundColor: theme.error + '15' }]}>
+              <Ionicons name="warning" size={32} color={theme.error} />
+            </View>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Delete Account?</Text>
+            <Text style={[styles.modalSubtitle, { color: theme.gray, textAlign: 'center' }]}>
+              This action is permanent. All your transactions, budgets, and goals will be deleted forever.
+            </Text>
+            
+            <View style={styles.modalActions}>
+              <TouchableOpacity 
+                onPress={() => setDeleteModalVisible(false)}
+                style={[styles.modalActionBtn, { backgroundColor: theme.lightGray }]}
+                disabled={isDeleting}
+              >
+                <Text style={{ color: theme.gray, fontWeight: 'bold' }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                onPress={async () => {
+                  setIsDeleting(true);
+                  try {
+                    await api.delete('/auth/delete-account');
+                    setDeleteModalVisible(false);
+                    await logout();
+                    router.replace('/login');
+                    showNotification("Account deleted successfully", "success");
+                  } catch (e: any) {
+                    Alert.alert("Error", e.response?.data?.message || "Failed to delete account");
+                    setIsDeleting(false);
+                  }
+                }}
+                style={[styles.modalActionBtn, { backgroundColor: theme.error }]}
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={{ color: '#fff', fontWeight: 'bold' }}>Delete Forever</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -655,7 +741,9 @@ const styles = StyleSheet.create({
   monthText: { fontSize: 15, fontWeight: 'bold', marginRight: 4 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalContent: { width: '100%', padding: 28, borderRadius: 36, borderWidth: 1 },
-  modalTitle: { fontSize: 22, fontWeight: 'bold', marginBottom: 24, textAlign: 'center' },
+  modalTitle: { fontSize: 22, fontWeight: 'bold', marginBottom: 8, textAlign: 'center' },
+  modalSubtitle: { fontSize: 14, marginBottom: 24, textAlign: 'center', lineHeight: 20 },
+  modalIconCircle: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginBottom: 16 },
   pickerContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 32 },
   pickerColumn: { flex: 1, marginHorizontal: 8 },
   pickerLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginBottom: 16, textAlign: 'center' },
@@ -683,6 +771,7 @@ const styles = StyleSheet.create({
   settingsIconWrap: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
   settingsRowTitle: { fontSize: 15, fontWeight: '600' },
   settingsRowSub: { fontSize: 12, marginTop: 2 },
-  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, borderRadius: 20, borderWidth: 1.5, marginBottom: 50 },
+  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, borderRadius: 20, borderWidth: 1.5, marginBottom: 12 },
+  deleteAccountBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 14, borderRadius: 20, borderWidth: 1.5 },
   pwInput: { borderWidth: 1, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, marginBottom: 12 },
 });

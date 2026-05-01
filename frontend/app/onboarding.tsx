@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -54,6 +55,7 @@ export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const { theme, themeName } = useTheme();
 
+  const { user } = useAuth();
   const isDark = themeName !== 'light' && themeName !== 'tropical';
   const statusBarStyle = isDark ? 'light-content' : 'dark-content';
 
@@ -71,7 +73,8 @@ export default function OnboardingScreen() {
 
   const finishOnboarding = async () => {
     try {
-      await SecureStore.setItemAsync('hasSeenOnboarding', 'true');
+      const key = user?.id ? `hasSeenOnboarding_${user.id}` : 'hasSeenOnboarding';
+      await SecureStore.setItemAsync(key, 'true');
       router.replace('/');
     } catch (error) {
       console.error('Error saving onboarding state:', error);

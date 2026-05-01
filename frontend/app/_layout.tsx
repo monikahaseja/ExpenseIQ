@@ -1,9 +1,7 @@
 import { Stack, useRouter, useSegments } from "expo-router";
 import { useEffect, useState } from "react";
 import { View, Text, ActivityIndicator } from "react-native";
-import { useColorScheme } from "nativewind";
 import { initDB } from "../db/database";
-import { Colors } from "../constants/colors";
 import { NotificationProvider } from "../components/NotificationContext";
 import { AuthProvider, useAuth } from "../context/AuthContext";
 import { ThemeProvider, useTheme } from "../context/ThemeContext";
@@ -14,6 +12,7 @@ import "../global.css";
 function MainLayout() {
   const { theme, themeName } = useTheme();
   const [dbLoaded, setDbLoaded] = useState(false);
+  const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean | null>(null);
   const { user, isLoading: authLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
@@ -34,10 +33,8 @@ function MainLayout() {
     const inAuthGroup = segments[0] === '(auth)';
 
     if (!user && !inAuthGroup) {
-      // Redirect to login if not logged in and not in auth group
       router.replace('/login');
     } else if (user && inAuthGroup) {
-      // Redirect to tabs if logged in and in auth group
       router.replace('/');
     }
   }, [user, segments, authLoading, dbLoaded]);
@@ -66,15 +63,6 @@ function MainLayout() {
           name="add-expense" 
           options={{ 
             presentation: 'modal', 
-            title: 'Add Expense',
-            headerStyle: {
-              backgroundColor: theme.background,
-            },
-            headerTintColor: theme.text,
-            headerTitleStyle: {
-              fontWeight: 'bold',
-            },
-            headerShadowVisible: false,
             headerShown: false,
           }} 
         />
@@ -82,15 +70,6 @@ function MainLayout() {
           name="expense-details" 
           options={{ 
             presentation: 'modal', 
-            title: 'Expense Details',
-            headerStyle: {
-              backgroundColor: theme.background,
-            },
-            headerTintColor: theme.text,
-            headerTitleStyle: {
-              fontWeight: 'bold',
-            },
-            headerShadowVisible: false,
             headerShown: false,
           }}
         />

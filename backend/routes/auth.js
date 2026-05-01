@@ -170,4 +170,28 @@ router.put('/change-password', auth, async (req, res) => {
     }
 });
 
+// Delete Account
+router.delete('/delete-account', auth, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+
+        // Delete all associated data
+        await Promise.all([
+            require('../models/Transaction').deleteMany({ userId }),
+            require('../models/Budget').deleteMany({ userId }),
+            require('../models/Goal').deleteMany({ userId }),
+            require('../models/AppName').deleteMany({ userId }),
+            require('../models/Rating').deleteMany({ userId }),
+            User.findByIdAndDelete(userId)
+        ]);
+
+        // Clear cookie
+        res.clearCookie('token');
+
+        res.json({ message: 'Account and all associated data deleted successfully' });
+    } catch (err) {
+        res.status(500).json({ message: 'Server error', error: err.message });
+    }
+});
+
 module.exports = router;
