@@ -317,7 +317,14 @@ export default function HomeScreen() {
               />
             </View>
             <TouchableOpacity 
-              onPress={() => router.push("/add-expense")}
+              onPress={() => {
+                const year = currentDate.getFullYear();
+                const month = (currentDate.getMonth() + 1).toString().padStart(2, "0");
+                router.push({
+                  pathname: "/add-expense",
+                  params: { initialDate: `${year}-${month}-01` }
+                });
+              }}
               style={[styles.addBtn, { backgroundColor: theme.primaryBg, borderColor: theme.primary, borderWidth: 1 }]}
             >
               <Ionicons name="add" size={28} color={theme.primary} />
@@ -377,7 +384,14 @@ export default function HomeScreen() {
                 
                 <View style={{ flexDirection: 'row', gap: 12, marginTop: 24 }}>
                   <TouchableOpacity 
-                    onPress={() => router.push("/add-expense")}
+                    onPress={() => {
+                      const year = currentDate.getFullYear();
+                      const month = (currentDate.getMonth() + 1).toString().padStart(2, "0");
+                      router.push({
+                        pathname: "/add-expense",
+                        params: { initialDate: `${year}-${month}-01` }
+                      });
+                    }}
                     style={[styles.emptyAddBtn, { borderColor: theme.primary }]}
                   >
                     <Text style={{ color: theme.primary, fontWeight: 'bold' }}>Add Entry</Text>

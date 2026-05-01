@@ -11,7 +11,8 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  ActivityIndicator
+  ActivityIndicator,
+  Modal
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors } from "../constants/colors";
@@ -44,6 +45,15 @@ export default function AddExpenseScreen() {
   const [titleError, setTitleError] = useState("");
   const [amountError, setAmountError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [transactionDate, setTransactionDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [tempDate, setTempDate] = useState(new Date());
+
+  useEffect(() => {
+    if (params.initialDate) {
+      setTransactionDate(new Date(params.initialDate as string));
+    }
+  }, [params.initialDate]);
 
   useEffect(() => {
     if (params.id) {
@@ -159,7 +169,7 @@ export default function AddExpenseScreen() {
         if (expenseId) {
           await api.put(`/transactions/${expenseId}`, expenseData);
         } else {
-          await api.post(`/transactions`, expenseData);
+          await api.post(`/transactions`, { ...expenseData, created_at: transactionDate.toISOString() });
         }
       }
 
@@ -173,7 +183,7 @@ export default function AddExpenseScreen() {
         } else if (!expenseId) {
           await db.runAsync(
             "INSERT INTO transactions (title, amount, type, category, payment_mode, tags, is_recurring, use_limit, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-            [title, parseFloat(amount), type, finalCategory, paymentMode, tags, isRecurring ? 1 : 0, useLimit ? 1 : 0, now(), now()],
+            [title, parseFloat(amount), type, finalCategory, paymentMode, tags, isRecurring ? 1 : 0, useLimit ? 1 : 0, transactionDate.toISOString(), now()],
           );
         }
       } catch (dbError) {
@@ -200,7 +210,8 @@ export default function AddExpenseScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+    <>
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         className="flex-1"
@@ -297,6 +308,24 @@ export default function AddExpenseScreen() {
               style={{ color: theme.text }}
             />
           </View>
+
+          <Text className="text-gray-400 font-bold text-xs mb-3 uppercase tracking-widest ml-1">
+            Date
+          </Text>
+          <TouchableOpacity 
+            onPress={() => {
+              setTempDate(new Date(transactionDate));
+              setShowDatePicker(true);
+            }}
+            className="flex-row items-center rounded-2xl px-4 py-4 mb-6 border" 
+            style={{ backgroundColor: theme.background, borderColor: theme.border }}
+          >
+            <Ionicons name="calendar-outline" size={20} color={theme.primary} />
+            <Text className="ml-3 text-lg font-medium" style={{ color: theme.text }}>
+              {transactionDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
+            </Text>
+            <Ionicons name="chevron-down" size={16} color={theme.gray} style={{ marginLeft: 'auto' }} />
+          </TouchableOpacity>
 
           <Text className="text-gray-400 font-bold text-xs mb-3 uppercase tracking-widest ml-1">
             Amount (₹)
@@ -477,6 +506,99 @@ export default function AddExpenseScreen() {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
-    </SafeAreaView>
+
+    {/* Date Picker Modal */}
+    <Modal visible={showDatePicker} transparent animationType="fade">
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+        <View style={{ width: '100%', backgroundColor: theme.card, borderRadius: 32, padding: 24, borderWidth: 1, borderColor: theme.border }}>
+          <Text style={{ fontSize: 20, fontWeight: 'bold', color: theme.text, textAlign: 'center', marginBottom: 20 }}>Select Date</Text>
+          
+          <View style={{ flexDirection: 'row', height: 200, marginBottom: 20 }}>
+            {/* Day */}
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 10, fontWeight: 'bold', color: theme.gray, textAlign: 'center', marginBottom: 10 }}>DAY</Text>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {Array.from({ length: new Date(tempDate.getFullYear(), tempDate.getMonth() + 1, 0).getDate() }, (_, i) => i + 1).map(day => (
+                  <TouchableOpacity 
+                    key={day} 
+                    onPress={() => {
+                      const nd = new Date(tempDate);
+                      nd.setDate(day);
+                      setTempDate(nd);
+                    }}
+                    style={{ paddingVertical: 10, borderRadius: 12, backgroundColor: tempDate.getDate() === day ? theme.primaryBg : 'transparent' }}
+                  >
+                    <Text style={{ textAlign: 'center', color: tempDate.getDate() === day ? theme.primary : theme.text, fontWeight: tempDate.getDate() === day ? 'bold' : 'normal' }}>{day}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+            
+            {/* Month */}
+            <View style={{ flex: 1.5 }}>
+              <Text style={{ fontSize: 10, fontWeight: 'bold', color: theme.gray, textAlign: 'center', marginBottom: 10 }}>MONTH</Text>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {Array.from({ length: 12 }, (_, i) => i).map(month => {
+                  const mName = new Date(2000, month).toLocaleString('default', { month: 'short' });
+                  return (
+                    <TouchableOpacity 
+                      key={month} 
+                      onPress={() => {
+                        const nd = new Date(tempDate);
+                        nd.setMonth(month);
+                        setTempDate(nd);
+                      }}
+                      style={{ paddingVertical: 10, borderRadius: 12, backgroundColor: tempDate.getMonth() === month ? theme.primaryBg : 'transparent' }}
+                    >
+                      <Text style={{ textAlign: 'center', color: tempDate.getMonth() === month ? theme.primary : theme.text, fontWeight: tempDate.getMonth() === month ? 'bold' : 'normal' }}>{mName}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            {/* Year */}
+            <View style={{ flex: 1.2 }}>
+              <Text style={{ fontSize: 10, fontWeight: 'bold', color: theme.gray, textAlign: 'center', marginBottom: 10 }}>YEAR</Text>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(year => (
+                  <TouchableOpacity 
+                    key={year} 
+                    onPress={() => {
+                      const nd = new Date(tempDate);
+                      nd.setFullYear(year);
+                      setTempDate(nd);
+                    }}
+                    style={{ paddingVertical: 10, borderRadius: 12, backgroundColor: tempDate.getFullYear() === year ? theme.primaryBg : 'transparent' }}
+                  >
+                    <Text style={{ textAlign: 'center', color: tempDate.getFullYear() === year ? theme.primary : theme.text, fontWeight: tempDate.getFullYear() === year ? 'bold' : 'normal' }}>{year}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <TouchableOpacity 
+              onPress={() => setShowDatePicker(false)} 
+              style={{ flex: 1, padding: 14, borderRadius: 16, backgroundColor: theme.border, alignItems: 'center' }}
+            >
+              <Text style={{ color: theme.text, fontWeight: 'bold' }}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              onPress={() => {
+                setTransactionDate(new Date(tempDate));
+                setShowDatePicker(false);
+              }}
+              style={{ flex: 1, padding: 14, borderRadius: 16, backgroundColor: theme.primary, alignItems: 'center' }}
+            >
+              <Text style={{ color: 'white', fontWeight: 'bold' }}>Select</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+      </SafeAreaView>
+    </>
   );
 }

@@ -283,11 +283,10 @@ export default function AdvisorScreen() {
   return (
     <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: theme.background }}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior="padding"
         style={{ flex: 1, backgroundColor: theme.background }}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
       >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
             {/* Header */}
             <View className="px-4 pt-4 pb-3">
@@ -363,7 +362,8 @@ export default function AdvisorScreen() {
               ref={scrollRef}
               className="flex-1"
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }}
+              keyboardDismissMode="on-drag"
+              contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24, flexGrow: 1 }}
               onContentSizeChange={() =>
                 scrollRef.current?.scrollToEnd({ animated: true })
               }
@@ -807,7 +807,6 @@ export default function AdvisorScreen() {
               </View>
             </View>
           </Animated.View>
-        </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
