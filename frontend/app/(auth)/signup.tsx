@@ -30,7 +30,7 @@ export default function SignupScreen() {
       const response = await api.post(`/auth/signup`, { name, email, password, phoneNumber });
       const { token, user } = response.data.data;
       await login(token, user);
-      router.replace('/');
+      router.replace('/onboarding');
     } catch (error: any) {
       console.error('Signup Error:', error);
       if (error.response) {

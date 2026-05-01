@@ -472,6 +472,20 @@ export default function SettingsScreen() {
 
           <TouchableOpacity 
             style={[styles.settingsRow, { borderBottomColor: theme.border }]}
+            onPress={() => router.push("/onboarding" as any)}
+          >
+            <View style={[styles.settingsIconWrap, { backgroundColor: theme.primaryBg }]}>
+              <Ionicons name="rocket-outline" size={20} color={theme.primary} />
+            </View>
+            <View style={styles.flex1}>
+              <Text style={[styles.settingsRowTitle, { color: theme.text }]}>App Walkthrough</Text>
+              <Text style={[styles.settingsRowSub, { color: theme.gray }]}>View onboarding screens again</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={theme.tabIconDefault} />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.settingsRow, { borderBottomColor: theme.border }]}
             onPress={() => router.push("/rate-app" as any)}
           >
             <View style={[styles.settingsIconWrap, { backgroundColor: theme.primaryBg }]}>
