@@ -17,6 +17,7 @@ export default function TabLayout() {
         tabBarActiveTintColor: theme.primary,
         tabBarInactiveTintColor: theme.tabIconDefault,
         tabBarShowLabel: false,
+        tabBarHideOnKeyboard: true,
         tabBarStyle: {
           backgroundColor: theme.background,
           borderTopWidth: 1,

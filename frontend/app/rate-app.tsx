@@ -84,11 +84,6 @@ export default function RateAppScreen() {
             <Text style={[styles.statNumber, { color: theme.primary }]}>⭐ {avgRating}</Text>
             <Text style={[styles.statLabel, { color: theme.gray }]}>Avg Rating</Text>
           </View>
-          <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
-          <View style={styles.statItem}>
-            <Text style={[styles.statNumber, { color: theme.primary }]}>{totalRatings}</Text>
-            <Text style={[styles.statLabel, { color: theme.gray }]}>Total Ratings</Text>
-          </View>
         </View>
 
         {/* Rating Card */}
