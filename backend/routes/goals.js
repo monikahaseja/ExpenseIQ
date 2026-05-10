@@ -79,6 +79,39 @@ router.put('/:id/progress', auth, async (req, res) => {
     }
 });
 
+// @route   PUT /api/goals/:id
+// @desc    Update a goal
+// @access  Private
+router.put('/:id', auth, async (req, res) => {
+    try {
+        const { title, target_amount, current_amount, icon, color, deadline } = req.body;
+        let goal = await Goal.findById(req.params.id);
+
+        if (!goal) return res.status(404).json({ message: 'Goal not found' });
+        const userId = req.user.id || req.user.userId;
+        if (goal.userId.toString() !== userId) {
+            return res.status(401).json({ message: 'User not authorized' });
+        }
+
+        // Update fields if they are provided
+        if (title !== undefined) goal.title = title;
+        if (target_amount !== undefined) goal.target_amount = target_amount;
+        if (current_amount !== undefined) goal.current_amount = current_amount;
+        if (icon !== undefined) goal.icon = icon;
+        if (color !== undefined) goal.color = color;
+        if (deadline !== undefined) goal.deadline = deadline;
+
+        await goal.save();
+        res.json({ message: "Goal updated successfully", data: goal, total_data: 1 });
+    } catch (err) {
+        console.error(err.message);
+        if (err.kind === 'ObjectId') {
+            return res.status(404).json({ message: 'Goal not found' });
+        }
+        res.status(500).send('Server Error');
+    }
+});
+
 // @route   DELETE /api/goals/:id
 // @desc    Delete a goal
 // @access  Private

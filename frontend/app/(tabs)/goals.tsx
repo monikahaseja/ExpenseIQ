@@ -39,6 +39,7 @@ export default function GoalsScreen() {
   const [selectedIcon, setSelectedIcon] = useState("briefcase");
   const [selectedColor, setSelectedColor] = useState("#60a5fa");
   const [loading, setLoading] = useState(false);
+  const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
   
   const [adjustModalVisible, setAdjustModalVisible] = useState(false);
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
@@ -70,31 +71,79 @@ export default function GoalsScreen() {
       return;
     }
 
+    const target = parseFloat(targetAmount);
+    const initial = parseFloat(currentAmount || "0");
+
+    if (isNaN(target) || target <= 0) {
+      Alert.alert("Error", "Savings Goal Amount must be a positive number");
+      return;
+    }
+
+    if (initial < 0) {
+      Alert.alert("Error", "Amount Already Saved cannot be negative");
+      return;
+    }
+
+    if (initial > target) {
+      Alert.alert("Error", "Amount Already Saved cannot be greater than Savings Goal Amount");
+      return;
+    }
+
     setLoading(true);
     try {
       if (token) {
-        await api.post("/goals", {
-          title,
-          target_amount: parseFloat(targetAmount),
-          current_amount: parseFloat(currentAmount || "0"),
-          icon: selectedIcon,
-          color: selectedColor,
-          deadline: new Date().toISOString()
-        });
+        if (editingGoal) {
+          // Update existing goal
+          await api.put(`/goals/${editingGoal.id}`, {
+            title,
+            target_amount: target,
+            current_amount: initial,
+            icon: selectedIcon,
+            color: selectedColor,
+          });
+          showNotification("Goal updated successfully!", "success");
+        } else {
+          // Create new goal
+          await api.post("/goals", {
+            title,
+            target_amount: target,
+            current_amount: initial,
+            icon: selectedIcon,
+            color: selectedColor,
+            deadline: new Date().toISOString()
+          });
+          showNotification("New goal created!", "success");
+        }
       }
       
       setModalVisible(false);
-      setTitle("");
-      setTargetAmount("");
-      setCurrentAmount("");
+      resetModal();
       fetchGoals();
-      showNotification("New goal created!", "success");
     } catch (e) {
       console.error("Error saving goal:", e);
       Alert.alert("Error", "Failed to save goal.");
     } finally {
       setLoading(false);
     }
+  };
+
+  const resetModal = () => {
+    setTitle("");
+    setTargetAmount("");
+    setCurrentAmount("");
+    setSelectedIcon("briefcase");
+    setSelectedColor("#60a5fa");
+    setEditingGoal(null);
+  };
+
+  const openEditModal = (goal: Goal) => {
+    setEditingGoal(goal);
+    setTitle(goal.title);
+    setTargetAmount(goal.target_amount.toString());
+    setCurrentAmount(goal.current_amount.toString());
+    setSelectedIcon(goal.icon);
+    setSelectedColor(goal.color);
+    setModalVisible(true);
   };
 
   const updateGoalProgress = async (goal: Goal, amount: number) => {
@@ -189,9 +238,14 @@ export default function GoalsScreen() {
                         ₹{goal.current_amount.toLocaleString()} / ₹{goal.target_amount.toLocaleString()}
                       </Text>
                     </View>
-                    <TouchableOpacity onPress={() => deleteGoal(goal.id)} style={{ padding: 8 }}>
-                      <Ionicons name="trash-outline" size={20} color={theme.error} />
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', gap: 4 }}>
+                      <TouchableOpacity onPress={() => openEditModal(goal)} style={{ padding: 8 }}>
+                        <Ionicons name="pencil-outline" size={20} color={theme.gray} />
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => deleteGoal(goal.id)} style={{ padding: 8 }}>
+                        <Ionicons name="trash-outline" size={20} color={theme.error} />
+                      </TouchableOpacity>
+                    </View>
                   </View>
 
                   <View style={{ marginBottom: 16 }}>
@@ -265,7 +319,7 @@ export default function GoalsScreen() {
         <Modal visible={modalVisible} transparent animationType="slide">
           <View style={styles.modalOverlay}>
             <View style={[styles.modalContent, { backgroundColor: theme.card, borderColor: theme.border }]}>
-               <Text style={[styles.modalTitle, { color: theme.text }]}>New Savings Goal</Text>
+               <Text style={[styles.modalTitle, { color: theme.text }]}>{editingGoal ? "Edit Savings Goal" : "New Savings Goal"}</Text>
                <TextInput 
                   placeholder="What is this goal for?" 
                   placeholderTextColor={theme.gray}
@@ -274,7 +328,7 @@ export default function GoalsScreen() {
                   style={[styles.input, { color: theme.text, backgroundColor: theme.lightGray, borderColor: theme.border }]}
                />
                <TextInput 
-                  placeholder="Target Amount (₹)" 
+                  placeholder="Savings Goal Amount (₹)" 
                   keyboardType="numeric"
                   placeholderTextColor={theme.gray}
                   value={targetAmount}
@@ -282,7 +336,7 @@ export default function GoalsScreen() {
                   style={[styles.input, { color: theme.text, backgroundColor: theme.lightGray, borderColor: theme.border }]}
                />
                <TextInput 
-                  placeholder="Initial Amount (₹)" 
+                  placeholder="Amount Already Saved (Optional) (₹)" 
                   keyboardType="numeric"
                   placeholderTextColor={theme.gray}
                   value={currentAmount}
@@ -314,11 +368,11 @@ export default function GoalsScreen() {
                </ScrollView>
 
                <View style={styles.modalActions}>
-                  <TouchableOpacity onPress={() => setModalVisible(false)} style={[styles.modalBtn, { backgroundColor: theme.lightGray }]}>
+                  <TouchableOpacity onPress={() => { setModalVisible(false); resetModal(); }} style={[styles.modalBtn, { backgroundColor: theme.lightGray }]}>
                      <Text style={{ color: theme.gray, fontWeight: 'bold' }}>Cancel</Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={saveGoal} style={[styles.modalBtn, { backgroundColor: theme.primary }]}>
-                     <Text style={{ color: '#fff', fontWeight: 'bold' }}>Create Goal</Text>
+                     <Text style={{ color: '#fff', fontWeight: 'bold' }}>{editingGoal ? "Update Goal" : "Create Goal"}</Text>
                   </TouchableOpacity>
                </View>
             </View>
